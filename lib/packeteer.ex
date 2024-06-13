@@ -260,26 +260,29 @@ defmodule Packeteer do
 
   @doc """
   A macro that creates `\#{name}encode` and `\#{name}decode` functions for given
-  `name` and `args`.
+  `name`, `field`-definitions and `opts`.
+
 
   `args` is a keyword list, where:
-  - `fields` is a mandatory list of nameid fields to encode/decode
-  - `opts` is an another optional keyword list for pre/post actions to take.
+  - `fields` is a mandatory (keyword) list of named fields to encode/decode
+  - `values` is an optional (keyword) list defining default values for one or more fields
+  - `beforehand`, an anonymous function that transforms input keyword list prior to encoding
+  - `afterwards`, an anonymous function that transforms output keyword list to its final result
 
 
   """
-  defmacro create(name, args, body) do
+  defmacro create(name, fields, opts, body) do
     IO.inspect(body)
     encode = String.to_atom("#{name}encode")
     decode = String.to_atom("#{name}decode")
 
-    fields = args[:fields]
-    values = args[:values] || []
+    # fields = args[:fields]
+    values = opts[:values] || []
 
     encode_doc = docstring(:encode, fields, values)
-    encode_fun = args[:encode]
+    encode_fun = opts[:encode]
     decode_doc = docstring(:decode, fields, values)
-    decode_fun = args[:decode]
+    decode_fun = opts[:decode]
 
     all? = all?(fields)
     fields = if all?, do: fields, else: fields ++ [{:skip__, {:bits, [], []}}]
@@ -288,8 +291,6 @@ defmodule Packeteer do
 
     codec = fragments(fields)
     binds = bindings(fields)
-
-    IO.inspect(Macro.to_string(codec), label: :codec)
 
     qq =
       quote do

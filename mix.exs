@@ -31,8 +31,8 @@ defmodule Packeteer.MixProject do
         "CHANGELOG.md": []
       ],
       source_url: @source_url,
-      formatters: ["html"],
-      assets: "assets"
+      formatters: ["html"]
+      # assets: "assets"
     ]
   end
 
