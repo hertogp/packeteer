@@ -24,3 +24,9 @@ packeteer-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# notes
+/notes/
+
+# scratch
+/scratch/

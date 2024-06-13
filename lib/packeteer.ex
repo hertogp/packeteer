@@ -263,12 +263,11 @@ defmodule Packeteer do
   `name`, `field`-definitions and `opts`.
 
 
-  `args` is a keyword list, where:
+  Arguments include
   - `fields` is a mandatory (keyword) list of named fields to encode/decode
   - `values` is an optional (keyword) list defining default values for one or more fields
-  - `beforehand`, an anonymous function that transforms input keyword list prior to encoding
-  - `afterwards`, an anonymous function that transforms output keyword list to its final result
-
+  - `encode`, an optional anonymous function that transforms input keyword list prior to encoding
+  - `decode`, an optional anonymous function that transforms output keyword list to its final result
 
   """
   defmacro create(name, fields, opts, body) do
