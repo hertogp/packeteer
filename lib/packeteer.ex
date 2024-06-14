@@ -10,33 +10,6 @@ defmodule Packeteer do
     # returns true if expression matches all bits
     {_name, {fld, _, arg}} = List.last(fields)
     fld in [:bits, :bitstring, :bytes, :binary] and arg in [[], [nil]]
-
-    # if fld in [:bits, :bitstring, :bytes, :binary] do
-    #   case arg do
-    #     [] -> true
-    #     [nil] -> true
-    #     _ -> false
-    #   end
-    # else
-    #   false
-    # end
-  end
-
-  # turns atom's into var in an expression
-  defp walk(ast) do
-    Macro.prewalk(ast, fn
-      v when is_atom(v) -> var(v)
-      v -> v
-    end)
-  end
-
-  # turn atom's into vars, keeping literals as-is
-  defp var(v) do
-    case v do
-      v when is_atom(v) -> Macro.var(v, __MODULE__)
-      v when is_tuple(v) -> walk(v)
-      v -> v
-    end
   end
 
   # [[ QUOTED FRAGMENTS ]]
@@ -172,6 +145,24 @@ defmodule Packeteer do
 
   # [[ BITSTR EXPRESSION ]]
 
+  # turns atom's into var in an expression
+  defp walk(ast) do
+    Macro.prewalk(ast, fn
+      v when is_atom(v) -> var(v)
+      v -> v
+    end)
+  end
+
+  # turn atom's into vars, keeping literals as-is
+  # v could be a field expression to calculate size
+  defp var(v) do
+    case v do
+      v when is_atom(v) -> Macro.var(v, __MODULE__)
+      v when is_tuple(v) -> walk(v)
+      v -> v
+    end
+  end
+
   defp fragments(fields) do
     parts =
       for {n, q} <- fields do
@@ -270,13 +261,15 @@ defmodule Packeteer do
   - `decode`, an optional anonymous function that transforms output keyword list to its final result
 
   """
-  defmacro create(name, fields, opts, body) do
-    IO.inspect(body)
+  defmacro bitblock(name, opts) do
     encode = String.to_atom("#{name}encode")
     decode = String.to_atom("#{name}decode")
 
-    # fields = args[:fields]
+    fields = opts[:fields]
     values = opts[:values] || []
+    # IO.inspect(fields, label: :fields)
+    # IO.inspect(values, label: :values)
+    # IO.inspect(opts, label: :opts)
 
     encode_doc = docstring(:encode, fields, values)
     encode_fun = opts[:encode]
@@ -306,7 +299,7 @@ defmodule Packeteer do
         end
 
         @doc unquote(encode_doc)
-        def unquote(encode)(kw) when is_list(kw) do
+        def unquote(encode)(kw \\ []) when is_list(kw) do
           fun = unquote(encode_fun)
           kw = Keyword.merge(unquote(values), kw)
           kw = if fun, do: fun.(kw), else: kw
@@ -317,7 +310,7 @@ defmodule Packeteer do
         end
       end
 
-    IO.puts(Macro.to_string(qq))
+    # IO.puts(Macro.to_string(qq))
     qq
   end
 end
