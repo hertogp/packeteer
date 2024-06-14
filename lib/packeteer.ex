@@ -295,7 +295,8 @@ defmodule Packeteer do
           offset = offset + bit_size(bin) - bit_size(skipped)
           kw = Keyword.delete(kw, :skip__)
           fun = unquote(decode_fun)
-          if fun, do: fun.(offset, kw), else: {offset, kw}
+          kw = if fun, do: fun.(offset, kw), else: kw
+          {offset, kw, bin}
         end
 
         @doc unquote(encode_doc)
@@ -312,5 +313,24 @@ defmodule Packeteer do
 
     # IO.puts(Macro.to_string(qq))
     qq
+  end
+
+  defmacro layout(name, opts) do
+    IO.inspect(name, label: "#{name}")
+    IO.inspect(opts)
+    [do: a] = opts
+    IO.inspect(a)
+
+    f = String.to_atom("#{name}_pipe")
+
+    q =
+      quote do
+        def unquote(f)(bin) do
+          unquote(a)(0, bin)
+        end
+      end
+
+    Macro.to_string(q) |> IO.puts()
+    q
   end
 end

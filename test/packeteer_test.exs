@@ -39,10 +39,10 @@ defmodule PacketeerTest do
 
       # decode returns {offset, kw-list, binary}
       for n <- 0..255,
-          do: assert({8, [a: n]} == uint.decode(<<n>>))
+          do: assert({8, [a: n], <<n>>} == uint.decode(<<n>>))
 
       # decode ignores remaining bits
-      assert {8, [a: 0]} == uint.decode(<<0, 42>>)
+      assert {8, [a: 0], <<0, 42>>} == uint.decode(<<0, 42>>)
     end
   end
 end
