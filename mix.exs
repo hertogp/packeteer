@@ -32,8 +32,11 @@ defmodule Packeteer.MixProject do
       ],
       source_url: @source_url,
       source_ref: "v#{@version}",
-      formatters: ["html"]
+      formatters: ["html"],
       # assets: "assets"
+      groups_for_docs: [
+        Primitives: &(&1[:section] == :fragment)
+      ]
     ]
   end
 

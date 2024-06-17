@@ -1,7 +1,3 @@
-defmodule PacketeerError do
-  defexception message: "packeteer error"
-end
-
 defmodule Packeteer do
   @moduledoc """
   Declaratively create encode/decode functions for binary data.
@@ -21,14 +17,20 @@ defmodule Packeteer do
   # [[ PRIMITIVES ]]
 
   @doc """
-  Returns quoted fragment for an unsigned integer for given `size`.
+  Returns a quoted fragment for an unsigned integer for given `size`.
 
   The `size` argument specifies the number of bits that will be matched.
+  The fragment is used as the right hand side of an unsigned integer segment
+  in a bit syntax expression.
 
   Pass in an optional second argument (:little or :native) if the
   default doesn't suit your needs.
 
+  Can only be used as the field definition for a named field in a
+  call to either `simplex/2` or `complex/2`.
+
   """
+  @doc section: :fragment
   def uint(size, endian \\ :big) do
     endian = var(endian)
     size = var(size)
@@ -44,6 +46,7 @@ defmodule Packeteer do
   default doesn't suit your needs.
 
   """
+  @doc section: :fragment
   def sint(size, endian \\ :big) do
     endian = var(endian)
     size = var(size)
@@ -60,6 +63,7 @@ defmodule Packeteer do
   default doesn't suit your needs.
 
   """
+  @doc section: :fragment
   def float(size, endian \\ :big) do
     endian = var(endian)
     size = var(size)
@@ -70,6 +74,7 @@ defmodule Packeteer do
   Shorthand for `binary/1`.
 
   """
+  @doc section: :fragment
   def bytes(size \\ nil) do
     if size,
       do: quote(do: bytes - size(unquote(var(size)))),
@@ -83,6 +88,7 @@ defmodule Packeteer do
   When omitted, matches the remaining _bytes_.
 
   """
+  @doc section: :fragment
   def binary(size \\ nil),
     do: bytes(size)
 
@@ -90,6 +96,7 @@ defmodule Packeteer do
   Shorthand for `bitstring/1`.
 
   """
+  @doc section: :fragment
   def bits(size \\ nil) do
     if size,
       do: quote(do: bits - size(unquote(var(size)))),
@@ -103,6 +110,7 @@ defmodule Packeteer do
   When omitted, matches the remaining _bits_.
 
   """
+  @doc section: :fragment
   def bitstring(size \\ nil),
     do: bits(size)
 
@@ -117,6 +125,7 @@ defmodule Packeteer do
   as appropiate.
 
   """
+  @doc section: :fragment
   def utf8(endian \\ :big),
     do: quote(do: utf8 - unquote(endian))
 
@@ -131,6 +140,7 @@ defmodule Packeteer do
   as appropiate.
 
   """
+  @doc section: :fragment
   def utf16(endian \\ :big),
     do: quote(do: utf16 - unquote(endian))
 
@@ -146,6 +156,7 @@ defmodule Packeteer do
   as appropiate.
 
   """
+  @doc section: :fragment
   def utf32(endian \\ :big),
     do: quote(do: utf32 - unquote(endian))
 
@@ -316,28 +327,27 @@ defmodule Packeteer do
     fields = opts[:fields]
     values = opts[:defaults] || []
     all? = all?(fields)
-
-    encode = String.to_atom("#{name}encode")
-    encode_doc = if opts[:docstr], do: docstring(:encode, fields, values), else: false
-    before_encode = before_encode(opts[:before_encode])
-    encode_args = maybe_fhead(:encode_head, opts)
-
-    decode = String.to_atom("#{name}decode")
-    decode_doc = if opts[:docstr], do: docstring(:decode, fields, values), else: false
-    after_decode = after_decode(opts[:after_decode])
-    decode_args = maybe_fhead(:decode_head, opts)
-
     maybe_skip = maybe_skip(all?)
     fields = if all?, do: fields, else: fields ++ [{:skip__, {:bits, [], []}}]
     keys = Enum.map(fields, fn {k, _} -> k end)
     vars = Enum.map(keys, fn k -> var(k) end)
+
+    encode_doc = if opts[:docstr], do: docstring(:encode, fields, values), else: false
+    encode_fun = String.to_atom("#{name}encode")
+    encode_args = maybe_fhead(:encode_head, opts)
+    before_encode = before_encode(opts[:before_encode])
+
+    decode_doc = if opts[:docstr], do: docstring(:decode, fields, values), else: false
+    decode_fun = String.to_atom("#{name}decode")
+    decode_args = maybe_fhead(:decode_head, opts)
+    after_decode = after_decode(opts[:after_decode])
 
     codec = fragments(fields)
     binds = bindings(fields)
 
     quote do
       @doc unquote(encode_doc)
-      def unquote(encode)(unquote_splicing(encode_args)) when is_list(kw) do
+      def unquote(encode_fun)(unquote_splicing(encode_args)) when is_list(kw) do
         try do
           unquote(before_encode)
           kw = Keyword.merge(unquote(values), kw)
@@ -350,18 +360,19 @@ defmodule Packeteer do
       end
 
       @doc unquote(decode_doc)
-      def unquote(decode)(unquote_splicing(decode_args)) when is_binary(bin) do
-        <<_::bits-size(offset), rest::bits>> = bin
-        unquote(codec) = rest
-        kw = Enum.zip(unquote(keys), unquote(vars))
-        skipped = kw[:skip__] || <<>>
-        offset = offset + bit_size(bin) - bit_size(skipped)
-        kw = Keyword.delete(kw, :skip__)
-        unquote(after_decode)
-        # fun = unquote(decode_fun)
-        # # # this should be a function returning either nil or ast for kw=fun.(offset, kw, bin)
-        # kw = if fun, do: fun.(offset, kw), else: kw
-        {offset, kw, bin}
+      def unquote(decode_fun)(unquote_splicing(decode_args)) when is_binary(bin) do
+        try do
+          <<_::bits-size(offset), rest::bits>> = bin
+          unquote(codec) = rest
+          kw = Enum.zip(unquote(keys), unquote(vars))
+          skipped = kw[:skip__] || <<>>
+          offset = offset + bit_size(bin) - bit_size(skipped)
+          kw = Keyword.delete(kw, :skip__)
+          unquote(after_decode)
+          {offset, kw, bin}
+        rescue
+          error -> {:error, Exception.message(error)}
+        end
       end
     end
   end
@@ -376,7 +387,7 @@ defmodule Packeteer do
 
   @doc """
   A macro that creates `\#{name}encode` and `\#{name}decode` functions for given
-  `name`, `field`-definitions and some extra options.
+  `name`, `fields`-definitions and some extra options.
 
   Arguments include
   - `fields`, a mandatory keyword list of field definitions
@@ -391,11 +402,12 @@ defmodule Packeteer do
   defmacro simplex(name, opts) do
     qq = do_simplex(name, opts)
     qq = if opts[:private], do: do_defp(qq), else: qq
-    IO.inspect(qq, label: :defpd)
+    # IO.inspect(qq, label: :defpd)
     qq
   end
 
   # [[ COMPLEX GENERATOR ]]
+
   defp f_type({_field, v}) do
     case elem(v, 0) do
       f when f in @primitives ->
@@ -459,17 +471,7 @@ defmodule Packeteer do
   end
 
   # TODO
-  # [ ] add before_encode option: fn kw -> kw
-  # [ ] add after_decode option: fn (offset, kw, bin) -> (offset, kw, bin)
-  # [ ] add join_encode true/false -> shorthand for Keyword.values |> Enum.join
-  # [ ] add docstr_encode option
-  # [ ] add docstr_decode option
-  # [ ] add as_defp true/false, if true, no docstr will be generated
-  # [ ] move ast building into functions
-  # [ ] use a maybe_fun(after_decode) -> which only inserts call if defined
-  defmacro fluid(name, opts) do
-    # IO.inspect(name, label: "#{name}")
-    # IO.inspect(opts, label: :opts)
+  defmacro complex(name, opts) do
     opts = Keyword.put_new(opts, :name, name)
     encode = String.to_atom("#{opts[:name]}encode")
     decode = String.to_atom("#{opts[:name]}decode")
@@ -479,11 +481,6 @@ defmodule Packeteer do
 
     {fields, defs} =
       consolidate(fields, opts, [], [], 0)
-
-    # |> IO.inspect(label: :consolidated)
-
-    # Macro.to_string(defs)
-    # |> IO.inspect(label: :defs)
 
     bbs =
       for {name, args} <- defs do
@@ -527,6 +524,7 @@ defmodule Packeteer do
     q
   end
 
+  @doc false
   defmacro bb(name, args) do
     quote do
       unquote(do_bb(name, args))
@@ -534,13 +532,6 @@ defmodule Packeteer do
   end
 
   def do_bb(name, opts) do
-    # TODO:
-    # [x] add docstr?: true/[false] to generate docstrings or not
-    #     if not, function is defined as private
-    # [ ] add function_name: rdata, causes rdata_decode(id, ..) instead of #{id}_decode/encode
-    # [?] add result_as_map?: true/[false] as shorthand for decode: fn kw -> Map.new(kw)
-    # IO.inspect({name, opts}, label: :bitblock)
-    # IO.inspect({Macro.expand(name, __ENV__), Macro.expand(opts, __ENV__)}, label: :expanded)
     encode = String.to_atom("#{name}encode")
     decode = String.to_atom("#{name}decode")
 
