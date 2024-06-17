@@ -2,17 +2,17 @@ defmodule PacketeerTest do
   use ExUnit.Case
   doctest Packeteer
 
-  describe "bitblock primitives" do
+  describe "simplex primitives" do
     test "uint" do
       code = """
       defmodule Uint do
         import Packeteer
 
-        bitblock("",
+        simplex("",
         fields: [
           a: uint(8)
         ],
-        values: [
+        defaults: [
           a: 128
         ]
         )
