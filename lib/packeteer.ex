@@ -1,8 +1,14 @@
+defmodule PacketeerError do
+  defexception message: "packeteer error"
+end
+
 defmodule Packeteer do
   @moduledoc """
   Declaratively create encode/decode functions for binary data.
 
   """
+
+  @primitives [:uint, :sint, :float, :bytes, :binary, :bits, :bitstring, :utf8, :utf16, :utf32]
 
   # [[ HELPERS ]]
 
@@ -247,33 +253,318 @@ defmodule Packeteer do
     """
   end
 
-  # [[ GENERATOR ]]
+  # [[ SIMPLEX GENERATOR ]]
+
+  defp before_encode(fun) do
+    if fun do
+      quote do
+        kw = unquote(fun).(kw)
+      end
+    end
+  end
+
+  defp after_decode(fun) do
+    if fun do
+      quote do
+        {offset, kw, bin} = unquote(fun).(offset, kw, bin)
+      end
+    end
+  end
+
+  defp maybe_skip(all?) do
+    unless all? do
+      quote do
+        kw = Keyword.put(kw, :skip__, "")
+      end
+    end
+  end
+
+  defp do_simplex(name, opts) do
+    # TODO:
+    # [ ] if docstr is false, function is defined as private
+    opts = Keyword.put_new(opts, :docstr, true)
+    fields = opts[:fields]
+    values = opts[:defaults] || []
+    all? = all?(fields)
+    encode = String.to_atom("#{name}encode")
+    decode = String.to_atom("#{name}decode")
+
+    # docstr needs original fields/values so do them before maybe adding :skip__
+    encode_doc = if opts[:docstr], do: docstring(:encode, fields, values), else: false
+    decode_doc = if opts[:docstr], do: docstring(:decode, fields, values), else: false
+    before_encode = before_encode(opts[:before_encode])
+    after_decode = after_decode(opts[:after_decode])
+    maybe_skip = maybe_skip(all?)
+
+    fields = if all?, do: fields, else: fields ++ [{:skip__, {:bits, [], []}}]
+    keys = Enum.map(fields, fn {k, _} -> k end)
+    vars = Enum.map(keys, fn k -> var(k) end)
+
+    codec = fragments(fields)
+    binds = bindings(fields)
+
+    quote do
+      @doc unquote(encode_doc)
+      def unquote(encode)(kw \\ []) when is_list(kw) do
+        unquote(before_encode)
+        kw = Keyword.merge(unquote(values), kw)
+        unquote(maybe_skip)
+        unquote_splicing(binds)
+        unquote(codec)
+      end
+
+      @doc unquote(decode_doc)
+      def unquote(decode)(offset \\ 0, bin) do
+        <<_::bits-size(offset), rest::bits>> = bin
+        unquote(codec) = rest
+        kw = Enum.zip(unquote(keys), unquote(vars))
+        skipped = kw[:skip__] || <<>>
+        offset = offset + bit_size(bin) - bit_size(skipped)
+        kw = Keyword.delete(kw, :skip__)
+        unquote(after_decode)
+        # fun = unquote(decode_fun)
+        # # # this should be a function returning either nil or ast for kw=fun.(offset, kw, bin)
+        # kw = if fun, do: fun.(offset, kw), else: kw
+        {offset, kw, bin}
+      end
+    end
+  end
+
+  defmacro simplex(name, opts) do
+    qq = do_simplex(name, opts)
+    IO.puts(Macro.to_string(qq))
+    IO.inspect(qq)
+
+    Macro.prewalk(qq, fn
+      {:def, x, y} -> {:defp, x, y}
+      other -> other
+    end)
+    |> IO.inspect(label: :defpd)
+  end
 
   @doc """
   A macro that creates `\#{name}encode` and `\#{name}decode` functions for given
-  `name`, `field`-definitions and `opts`.
-
+  `name`, `field`-definitions and some extra options.
 
   Arguments include
-  - `fields` is a mandatory (keyword) list of named fields to encode/decode
-  - `values` is an optional (keyword) list defining default values for one or more fields
-  - `encode`, an optional anonymous function that transforms input keyword list prior to encoding
-  - `decode`, an optional anonymous function that transforms output keyword list to its final result
+  - `fields`, a mandatory keyword list of field definitions
+  - `defaults` is an optional (keyword) list defining default values for one or more fields
+  - `before_encode`, a function that takes a keyword list and returns a (modified) keyword list
+  - `after_decode`, an function that takes `offset`, `kw`, `bin` and returns them, possibly modified
+  - `docstr`, if true docstrings will be generated
 
   """
-  defmacro bitblock(name, opts) do
+  # See: https://elixirforum.com/t/how-do-i-write-a-macro-that-dynamically-defines-a-public-or-private-function/14351
+  # - howto dynamically generate def or defp functions
+  defmacro fixed(name, opts) do
+    # TODO:
+    # [ ] if docstr is false, function is defined as private
+    opts = Keyword.put_new(opts, :docstr, true)
+    fields = opts[:fields]
+    values = opts[:defaults] || []
+    all? = all?(fields)
+    encode = String.to_atom("#{name}encode")
+    decode = String.to_atom("#{name}decode")
+
+    # docstr needs original fields/values so do them before maybe adding :skip__
+    encode_doc = if opts[:docstr], do: docstring(:encode, fields, values), else: false
+    decode_doc = if opts[:docstr], do: docstring(:decode, fields, values), else: false
+    before_encode = before_encode(opts[:before_encode])
+    after_decode = after_decode(opts[:after_decode])
+    maybe_skip = maybe_skip(all?)
+
+    fields = if all?, do: fields, else: fields ++ [{:skip__, {:bits, [], []}}]
+    keys = Enum.map(fields, fn {k, _} -> k end)
+    vars = Enum.map(keys, fn k -> var(k) end)
+
+    codec = fragments(fields)
+    binds = bindings(fields)
+
+    qq =
+      quote do
+        @doc unquote(encode_doc)
+        def unquote(encode)(kw \\ []) when is_list(kw) do
+          unquote(before_encode)
+          kw = Keyword.merge(unquote(values), kw)
+          unquote(maybe_skip)
+          unquote_splicing(binds)
+          unquote(codec)
+        end
+
+        @doc unquote(decode_doc)
+        def unquote(decode)(offset \\ 0, bin) do
+          <<_::bits-size(offset), rest::bits>> = bin
+          unquote(codec) = rest
+          kw = Enum.zip(unquote(keys), unquote(vars))
+          skipped = kw[:skip__] || <<>>
+          offset = offset + bit_size(bin) - bit_size(skipped)
+          kw = Keyword.delete(kw, :skip__)
+          unquote(after_decode)
+          # fun = unquote(decode_fun)
+          # # # this should be a function returning either nil or ast for kw=fun.(offset, kw, bin)
+          # kw = if fun, do: fun.(offset, kw), else: kw
+          {offset, kw, bin}
+        end
+      end
+
+    IO.puts(Macro.to_string(qq))
+    qq
+  end
+
+  defp f_type({_field, v}) do
+    case elem(v, 0) do
+      f when f in @primitives ->
+        :p
+
+      v ->
+        IO.inspect(v)
+        :f
+        # _ ->
+        #   raise "not a Packeteer field spec '#{field}: #{Macro.to_string(v)}'"
+    end
+  end
+
+  defp consolidate([], _opts, funcs, defs, _n),
+    do: {funcs, defs}
+
+  defp consolidate(fields, opts, [], [], 0) do
+    annotated_fields =
+      for field <- fields do
+        {f_type(field), field}
+      end
+      |> Enum.chunk_by(fn t -> elem(t, 0) end)
+
+    # IO.inspect(annotated_fields, label: :annotated_fields)
+    consolidate(annotated_fields, opts, [], [], 1)
+  end
+
+  defp consolidate([[{:f, _} | _] = h | tail], opts, funcs, defs, n) do
+    flist = for {:f, f} <- h, do: f
+    # plain func calls, so move on
+    consolidate(tail, opts, funcs ++ flist, defs, n + 1)
+  end
+
+  defp consolidate([[{:p, _} | _] = h | tail], opts, funcs, defs, n) do
+    plist = for {:p, p} <- h, do: p
+    klist = for {k, _} <- plist, do: k
+    name = String.to_atom("#{opts[:name]}_part_#{n}_")
+
+    values = Keyword.take(opts[:values], klist)
+    fields = Keyword.take(opts[:fields], klist)
+
+    bbdef = {name, fields: fields, values: values, docstr: false}
+    # IO.inspect({n, bbdef}, label: :hmm)
+
+    encode = String.to_atom("#{name}encode_")
+    decode = String.to_atom("#{name}decode_")
+
+    call_enc =
+      quote do
+        &(__MODULE__.unquote(encode) / 2)
+      end
+
+    call_dec =
+      quote do
+        &(__MODULE__.unquote(decode) / 2)
+      end
+
+    funcs = funcs ++ [{name, {call_enc, call_dec}}]
+    defs = defs ++ [bbdef]
+    consolidate(tail, opts, funcs, defs, n + 1)
+  end
+
+  # TODO
+  # [ ] add before_encode option: fn kw -> kw
+  # [ ] add after_decode option: fn (offset, kw, bin) -> (offset, kw, bin)
+  # [ ] add join_encode true/false -> shorthand for Keyword.values |> Enum.join
+  # [ ] add docstr_encode option
+  # [ ] add docstr_decode option
+  # [ ] add as_defp true/false, if true, no docstr will be generated
+  # [ ] move ast building into functions
+  # [ ] use a maybe_fun(after_decode) -> which only inserts call if defined
+  defmacro fluid(name, opts) do
+    # IO.inspect(name, label: "#{name}")
+    # IO.inspect(opts, label: :opts)
+    opts = Keyword.put_new(opts, :name, name)
+    encode = String.to_atom("#{opts[:name]}encode")
+    decode = String.to_atom("#{opts[:name]}decode")
+    fields = opts[:fields]
+    # values = opts[:values]
+    join = opts[:join]
+
+    {fields, defs} =
+      consolidate(fields, opts, [], [], 0)
+
+    # |> IO.inspect(label: :consolidated)
+
+    # Macro.to_string(defs)
+    # |> IO.inspect(label: :defs)
+
+    bbs =
+      for {name, args} <- defs do
+        do_bb(name, args)
+        # IO.inspect(ast, label: :ast)
+      end
+
+    q =
+      quote do
+        for bb <- unquote(bbs),
+            do: bb
+
+        def unquote(encode)(kw \\ []) do
+          encoded_kw =
+            for {field, {encode, _}} <- unquote(fields) do
+              {field, encode.(field, kw[field])}
+            end
+
+          if unquote(join),
+            do: Keyword.values(encoded_kw) |> Enum.join(),
+            else: encoded_kw
+        end
+
+        def unquote(decode)(offset, bin) do
+          map =
+            Enum.reduce(unquote(fields), %{offset: offset, bin: bin, kw: []}, fn e, acc ->
+              {field, {_, decode}} = e
+              {offset, value, bin} = decode.(acc.offset, acc.bin)
+
+              acc
+              |> Map.put(:offset, offset)
+              |> Map.put(:bin, bin)
+              |> Map.put(:kw, Keyword.put(acc.kw, field, value))
+            end)
+
+          {map.offset, map.kw, map.bin}
+        end
+      end
+
+    IO.puts(Macro.to_string(q))
+    q
+  end
+
+  defmacro bb(name, args) do
+    quote do
+      unquote(do_bb(name, args))
+    end
+  end
+
+  def do_bb(name, opts) do
+    # TODO:
+    # [x] add docstr?: true/[false] to generate docstrings or not
+    #     if not, function is defined as private
+    # [ ] add function_name: rdata, causes rdata_decode(id, ..) instead of #{id}_decode/encode
+    # [?] add result_as_map?: true/[false] as shorthand for decode: fn kw -> Map.new(kw)
+    # IO.inspect({name, opts}, label: :bitblock)
+    # IO.inspect({Macro.expand(name, __ENV__), Macro.expand(opts, __ENV__)}, label: :expanded)
     encode = String.to_atom("#{name}encode")
     decode = String.to_atom("#{name}decode")
 
     fields = opts[:fields]
     values = opts[:values] || []
-    # IO.inspect(fields, label: :fields)
-    # IO.inspect(values, label: :values)
-    # IO.inspect(opts, label: :opts)
 
-    encode_doc = docstring(:encode, fields, values)
+    encode_doc = if opts[:docstr], do: docstring(:encode, fields, values), else: "@doc false"
     encode_fun = opts[:encode]
-    decode_doc = docstring(:decode, fields, values)
+    decode_doc = if opts[:docstr], do: docstring(:decode, fields, values), else: "@doc false"
     decode_fun = opts[:decode]
 
     all? = all?(fields)
@@ -284,53 +575,30 @@ defmodule Packeteer do
     codec = fragments(fields)
     binds = bindings(fields)
 
-    qq =
-      quote do
-        @doc unquote(decode_doc)
-        def unquote(decode)(offset \\ 0, bin) do
-          <<_::bits-size(offset), rest::bits>> = bin
-          unquote(codec) = rest
-          kw = Enum.zip(unquote(keys), unquote(vars))
-          skipped = kw[:skip__] || <<>>
-          offset = offset + bit_size(bin) - bit_size(skipped)
-          kw = Keyword.delete(kw, :skip__)
-          fun = unquote(decode_fun)
-          kw = if fun, do: fun.(offset, kw), else: kw
-          {offset, kw, bin}
-        end
-
-        @doc unquote(encode_doc)
-        def unquote(encode)(kw \\ []) when is_list(kw) do
-          fun = unquote(encode_fun)
-          kw = Keyword.merge(unquote(values), kw)
-          kw = if fun, do: fun.(kw), else: kw
-          kw = if unquote(all?), do: kw, else: Keyword.put(kw, :skip__, "")
-          # introduce required var bindings to kw entries
-          unquote_splicing(binds)
-          unquote(codec)
-        end
+    quote do
+      @doc unquote(decode_doc)
+      def unquote(decode)(offset \\ 0, bin) do
+        <<_::bits-size(offset), rest::bits>> = bin
+        unquote(codec) = rest
+        kw = Enum.zip(unquote(keys), unquote(vars))
+        skipped = kw[:skip__] || <<>>
+        offset = offset + bit_size(bin) - bit_size(skipped)
+        kw = Keyword.delete(kw, :skip__)
+        fun = unquote(decode_fun)
+        kw = if fun, do: fun.(offset, kw), else: kw
+        {offset, kw, bin}
       end
 
-    # IO.puts(Macro.to_string(qq))
-    qq
-  end
-
-  defmacro layout(name, opts) do
-    IO.inspect(name, label: "#{name}")
-    IO.inspect(opts)
-    [do: a] = opts
-    IO.inspect(a)
-
-    f = String.to_atom("#{name}_pipe")
-
-    q =
-      quote do
-        def unquote(f)(bin) do
-          unquote(a)(0, bin)
-        end
+      @doc unquote(encode_doc)
+      def unquote(encode)(kw \\ []) when is_list(kw) do
+        fun = unquote(encode_fun)
+        kw = Keyword.merge(unquote(values), kw)
+        kw = if fun, do: fun.(kw), else: kw
+        kw = if unquote(all?), do: kw, else: Keyword.put(kw, :skip__, "")
+        # introduce required var bindings to kw entries
+        unquote_splicing(binds)
+        unquote(codec)
       end
-
-    Macro.to_string(q) |> IO.puts()
-    q
+    end
   end
 end
