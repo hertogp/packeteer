@@ -495,10 +495,11 @@ defmodule Packeteer do
   Lastly, the `pattern` option allows for including a literal as the first
   argument of the encode/decode functions being generated.  That allows for
   a encoder/decoder module to provide it's own `M.encode/1` and `M.decode/3`
-  functions that use its private `M.encode/2`, `M.decode/4` private functions
-  relying on pattern matching to call the right encoder/decoder.  This assumes
-  you'll have multiple calls to the `simplex` function using different values
-  for the pattern option.
+  functions that use its private `M.encode/2`, `M.decode/4` functions relying
+  on pattern matching to call the right encoder/decoder.  This assumes you'll
+  have multiple calls to the `simplex` function using different values for the
+  pattern option and possibly different layouts for the binary to be
+  encoded/decoded..
 
   """
   # See: https://elixirforum.com/t/how-do-i-write-a-macro-that-dynamically-defines-a-public-or-private-function/14351
