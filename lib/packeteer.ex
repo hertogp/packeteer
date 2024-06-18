@@ -466,6 +466,16 @@ defmodule Packeteer do
   and adding or skipping fields in the binary, the returned `non_neg_integer`
   (i.e. the offset) should point to the remaining part of the binary yet to be decoded.
 
+  The `docstr` option, either `true` or `false`, is used to determine whether
+  or not docstrings are generated for the encode/decode functions. By default
+  these functions are generated as public functions, setting `docstr` to
+  `false` allows for eliminating them from documentation while still be
+  available as public functions of your en/decoder module.
+
+  The `private` option, either `true` or `false`, determines whether the
+  encode/decode functions are defined as private or public functions. If
+  `true`, no docstrings will be generated regardless of the `docstr` option's
+  value.
 
 
 
