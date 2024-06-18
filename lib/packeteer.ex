@@ -11,7 +11,7 @@ defmodule Packeteer do
   @doc """
   Returns a quoted fragment for an unsigned integer for given `size` in _bits_.
 
-  The `size` argument can be a simple expression like `:a * 8` (yielding an integer) when `:a` is an
+  The `size` argument can also be a simple expression like `:a * 8` (yielding an integer) when `:a` is an
   earlier field that decodes an integer.
 
   Pass in an optional second argument (:little or :native) if the
@@ -31,7 +31,7 @@ defmodule Packeteer do
   @doc """
   Returns a quoted fragment for an signed integer for given `size` in _bits_.
 
-  The `size` argument can be a simple expression like `:a * 8` when `:a` is an
+  The `size` argument can also be a simple expression like `:a * 8` when `:a` is an
   earlier field that decodes an integer.
 
   Pass in an optional second argument (`:little` or `:native`) if the
@@ -81,7 +81,7 @@ defmodule Packeteer do
   @doc """
   Returns a quoted fragment for a binary of given `size` in _bytes_.
 
-  The `size` argument can be a simple expression like `:a * 8` when `:a` is an
+  The `size` argument can also be a simple expression like `:a * 8` when `:a` is an
   earlier field that decodes an integer. When omitted, matches the remaining
   bytes.
 
@@ -107,7 +107,7 @@ defmodule Packeteer do
   @doc """
   Returns a quoted fragment for a bitstring of given `size` in _bits_.
 
-  The `size` argument can be a simple expression like `:a * 8` when `:a` is an
+  The `size` argument can also be a simple expression like `:a * 8` when `:a` is an
   earlier field that decodes an integer. When omitted, matches the remaining
   bits.
 
@@ -122,7 +122,7 @@ defmodule Packeteer do
   @doc """
   Returns a quoted fragment for a utf8 codepoint.
 
-  utf8 codepoints are encoded in (or decoded from) 1..4 bytes. The bitsyntax
+  Utf8 codepoints are encoded in (or decoded from) 1..4 bytes. The bitsyntax
   only supports an endianness modifier, so this can encode or decode only 1 utf
   codepoint at a time.
 
@@ -137,7 +137,7 @@ defmodule Packeteer do
   @doc """
   Returns a quoted fragment for a utf16 codepoint.
 
-  utf16 codepoints are encoded in (or decoded from) two 16 bit units
+  Utf16 codepoints are encoded in (or decoded from) two 16 bit units
   (i.e. 4 bytes). The bitsyntax only supports an endianness modifier, so this
   can encode or decode only 1 utf codepoint at a time.
 
@@ -152,7 +152,7 @@ defmodule Packeteer do
   @doc """
   Returns a quoted fragment for a utf32 codepoint.
 
-  utf16 codepoints are encoded in (or decoded from) 32 bits (i.e. 4 bytes).
+  Utf32 codepoints are encoded in (or decoded from) 32 bits (i.e. 4 bytes).
   The bitsyntax only supports an endianness modifier, so this can encode or
   decode only 1 utf codepoint at a time.  Only the first (lsb) 21 bits are
   used at the moment.
@@ -432,7 +432,7 @@ defmodule Packeteer do
   - `after_decode`, an function that takes `offset`, `kw`, `bin` and returns them, possibly modified
   - `docstr`, if true docstrings will be generated
   - `private`, if true the encode/decode functions are defined as private without docstrings
-  - `pattern`, if defined it is inserted as encode/decode first function argument
+  - `pattern`, if defined it is inserted as the argument of the encode/decode functions
 
   The `name` argument is used to construct function names to be defined as
   `\#{name}encode(kw)` and `\#{name}decode(offset, bin)` respectively.
@@ -441,8 +441,9 @@ defmodule Packeteer do
   - `M.decode(offset, bin)`
 
   The `fields` argument must be a keyword list of fieldnames (atoms) that have calls to
-  [primitives](#primitives) as their value, which is used to construct the bitstring match expression
-  for both the encoder as well as the decoder function.
+  [primitives](#primitives) as their value. This list is used to construct the
+  bitstring match expression for both the encoder as well as the decoder
+  function.
 
 
   """
