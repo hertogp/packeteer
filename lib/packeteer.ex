@@ -426,6 +426,19 @@ defmodule Packeteer do
   Creates `encode` and `decode` functions for given `name`, _primitive_
   `fields`-definition and some extra options.
 
+  The `encode/1` function takes a keyword list of `{:name, value}`-pairs
+  and returns either a binary or an `{error, message}`-tuple.  See the `pattern`
+  option if you need a `encode/2` function for pattern matching instead.
+
+  The `decode/2` function takes an `offset` and `binary` and returns either an
+  `{;error, reason}`-tuple or a 3-tuple `{offset, kw, bin}`.  Where:
+  - `offset` is where decoding of `bin` left off,
+  - `kw` is the list of `{:name, value}` pairs decoded from `bin`
+  - `bin` is the binary being decoded.
+
+  Again, see the `pattern` option for creating a `decode/4` function.
+
+
   Optional extra arguments include:
   - `defaults`, an optional (keyword) list defining default values for one or more fields
   - `before_encode`, a function that takes a keyword list and returns a (modified) keyword list
@@ -452,7 +465,9 @@ defmodule Packeteer do
   strings.  When encoding, fields are encoded in the order listed in the
   `fields` keyword list but their default value is retrieved from this `defaults`
   list based on their name.  Hence, all fields with the same name will get the
-  value of the first occurrence of that field in this list.
+  value of the first occurrence of that field in this list.  Any fields _not_
+  listed in `defaults`, _must_ be present in the keyword list argument in a
+  call to the encode function to avoid an error.
 
   The `before_encode` option can be an anonymous function or a function
   reference. That function must have the signature `(Keyword.t) :: Keyword.t`.
