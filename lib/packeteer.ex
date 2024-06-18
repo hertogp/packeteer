@@ -220,60 +220,68 @@ defmodule Packeteer do
     |> String.replace("]", "\n]")
   end
 
-  defp docstring(:encode, fields, values) do
-    # don't want the hidden field to show up
-    fields = Keyword.delete(fields, :skip__)
-    values = Keyword.delete(values, :skip__)
-    codec = fragments(fields)
-
-    """
-    Encodes #{length(fields)} _named_ fields from given `kw` keyword list to a binary
-    as per field definitions below.
-
-    Fields are encoded in the order listed in the field definition.  All _named_ fields
-    must be present in `kw`-list, unless they have a defined default value.
-
-    Field definitions:
-    ```
-    #{pretty_fields(fields)}
-    ```
-
-    Bitstring expression:
-    ```
-    #{Macro.to_string(codec)}
-    ```
-    #{if values == [] do
-      "The encoder has no default values defined."
+  defp docstring(:encode, opts) do
+    if opts[:private] or not opts[:docstr] do
+      false
     else
+      # don't want the hidden field to show up
+      fields = Keyword.delete(opts[:fields], :skip__)
+      values = Keyword.delete(opts[:values], :skip__)
+      codec = fragments(fields)
+
       """
-      Default values:
+      Encodes #{length(fields)} _named_ fields from given `kw` keyword list to a binary
+      as per field definitions below.
+
+      Fields are encoded in the order listed in the field definition.  All _named_ fields
+      must be present in `kw`-list, unless they have a defined default value.
+
+      Field definitions:
       ```
-      #{inspect(values, pretty: true, width: 5, limit: :infinity)}
+      #{pretty_fields(fields)}
       ```
+
+      Bitstring expression:
+      ```
+      #{Macro.to_string(codec)}
+      ```
+      #{if values == [] do
+        "The encoder has no default values defined."
+      else
+        """
+        Default values:
+        ```
+        #{inspect(values, pretty: true, width: 5, limit: :infinity)}
+        ```
+        """
+      end}
       """
-    end}
-    """
+    end
   end
 
-  defp docstring(:decode, fields, _values) do
-    # don't want the hidden field to show up
-    fields = Keyword.delete(fields, :skip__)
-    codec = fragments(fields)
+  defp docstring(:decode, opts) do
+    if opts[:private] or not opts[:docstr] do
+      false
+    else
+      # don't want the hidden field to show up
+      fields = Keyword.delete(opts[:fields], :skip__)
+      codec = fragments(fields)
 
-    """
-    Decodes #{length(fields)} _named_ fields from given `bin` binary, starting at `offset`,
-    returns `{new_offset, Keyword.t, binary}`.
+      """
+      Decodes #{length(fields)} _named_ fields from given `bin` binary, starting at `offset`,
+      returns `{new_offset, Keyword.t, binary}`.
 
-    Field definitions:
-    ```
-    #{pretty_fields(fields)}
-    ```
+      Field definitions:
+      ```
+      #{pretty_fields(fields)}
+      ```
 
-    Bitstring expression:
-    ```
-    #{Macro.to_string(codec)}
-    ```
-    """
+      Bitstring expression:
+      ```
+      #{Macro.to_string(codec)}
+      ```
+      """
+    end
   end
 
   # [[ SIMPLEX GENERATOR ]]
@@ -306,11 +314,11 @@ defmodule Packeteer do
     end
   end
 
-  defp maybe_fhead(:encode_head, opts) do
+  defp maybe_pattern(:encode, opts) do
     # return ast for encoder func args, optionally with extra 1st arg for
     # pattern matching:
     # - normal: x_encode(kw \\ [])
-    # - fhead : x_encode(:something, kw \\ [])
+    # - pattern : x_encode(:something, kw \\ [])
     arg = [{:kw, [], Packeteer}]
     fh = opts[:pattern]
 
@@ -319,11 +327,11 @@ defmodule Packeteer do
       else: arg
   end
 
-  defp maybe_fhead(:decode_head, opts) do
+  defp maybe_pattern(:decode, opts) do
     # return ast for decoder func args, optionally with extra 1st arg for
     # pattern matching:
     # normal:  x_decode(offset \\ 0, bin)
-    # fhead :  x_decode(:something, offset \\ 0, bin)
+    # pattern :  x_decode(:something, offset \\ 0, bin)
     # changes that to x_encode(:something, kw \\ []).  Useful if you
     arg = [{:offset, [], Packeteer}, {:bin, [], Packeteer}]
     fh = opts[:pattern]
@@ -353,14 +361,14 @@ defmodule Packeteer do
     keys = Enum.map(fields, fn {k, _} -> k end)
     vars = Enum.map(keys, fn k -> var(k) end)
 
-    encode_doc = if opts[:docstr], do: docstring(:encode, fields, values), else: false
+    encode_doc = docstring(:encode, opts)
     encode_fun = String.to_atom("#{name}encode")
-    encode_args = maybe_fhead(:encode_head, opts)
+    encode_args = maybe_pattern(:encode, opts)
     before_encode = before_encode(opts[:before_encode])
 
-    decode_doc = if opts[:docstr], do: docstring(:decode, fields, values), else: false
+    decode_doc = docstring(:decode, opts)
     decode_fun = String.to_atom("#{name}decode")
-    decode_args = maybe_fhead(:decode_head, opts)
+    decode_args = maybe_pattern(:decode, opts)
     after_decode = after_decode(opts[:after_decode])
 
     codec = fragments(fields)
@@ -402,15 +410,29 @@ defmodule Packeteer do
   end
 
   @doc """
-  Creates `\#{name}encode` and `\#{name}decode` functions for given
-  `name`, _primitive_ `fields`-definition and some extra options.
+  Creates `encode` and `decode` functions for given `name`, _primitive_
+  `fields`-definition and some extra options.
 
-  Arguments include
-  - `fields`, a mandatory keyword list of field definitions containing only primitives
-  - `defaults` is an optional (keyword) list defining default values for one or more fields
+  Optional extra arguments include:
+  - `defaults`, an optional (keyword) list defining default values for one or more fields
   - `before_encode`, a function that takes a keyword list and returns a (modified) keyword list
   - `after_decode`, an function that takes `offset`, `kw`, `bin` and returns them, possibly modified
   - `docstr`, if true docstrings will be generated
+  - `private`, if true the encode/decode function are defined as private without docstrings
+  - `pattern`, if defined it is inserted as encode/decode first function argument
+
+  The `name` argument is used to construct function names to be defined as:
+  - `\#{name}encode(kw)`, and
+  - `\#{name}decode(offset, bin)`
+  If in some module M with only 1 simplex construction, using `name=""` results in:
+  - `M.encode(kw)`
+  - `M.decode(offset, bin)`
+  functions being defined.
+
+  The `fields` argument must be a keyword list of fieldnames (atoms) that have calls to
+  `primitives` as their value, which is used to construct the bitstring match expression
+  for both the encoder as well as the decoder function.
+
 
   """
   # See: https://elixirforum.com/t/how-do-i-write-a-macro-that-dynamically-defines-a-public-or-private-function/14351
