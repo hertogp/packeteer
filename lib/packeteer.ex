@@ -443,12 +443,30 @@ defmodule Packeteer do
   The `fields` argument must be a keyword list of field names (atoms) that have calls to
   [primitives](#primitives) as their value. This list is used to construct the
   bitstring match expression for both the encoder as well as the decoder
-  function. Hence, the order of the fields in this list is significant and their
-  values must be either integers, floats or strings.
+  function. Hence, the order of the fields in this list is significant and should be
+  unique for best encoding results.
 
-  The `default` argument can be used to provide a list of `{:name, value}`-pairs used
-  as default values upon encoding.  The values should be literals that fit in the
-  intended field and be their own AST.
+  The `defaults` argument can be used to provide a list of `{:name,
+  value}`-pairs used as default values upon encoding.  The values should be
+  literals that fit in the intended field and be either integers, floats or
+  strings.  When encoding, fields are encoded in the order listed in the
+  `fields` keyword list but their default value is retrieved from this `defaults`
+  list based on their name.  Hence, all fields with the same name will get the
+  value of the first occurrence of that field in this list.
+
+  The `before_encode` option can be an anonymous function or a function
+  reference. That function must have the signature `(Keyword.t) :: Keyword.t`.
+  It allows, e.g., for mapping symbolic values in the encode's keyword list
+  argument to their numeric counterpart prior to being encoded.
+
+  Similarly, the `after_decode` option allows for mapping numeric values to
+  their symbolic counter part.  Again, either an anonymous function or function
+  reference. That function's signature is `(non_neg_integer, Keyword.t, binary)
+  :: {non_neg_integer, Keyword.t, binary}`.  If it performs additional decoding
+  and adding or skipping fields in the binary, the returned `non_neg_integer`
+  (i.e. the offset) should point to the remaining part of the binary yet to be decoded.
+
+
 
 
   """
