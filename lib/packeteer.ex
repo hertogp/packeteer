@@ -418,19 +418,17 @@ defmodule Packeteer do
   - `before_encode`, a function that takes a keyword list and returns a (modified) keyword list
   - `after_decode`, an function that takes `offset`, `kw`, `bin` and returns them, possibly modified
   - `docstr`, if true docstrings will be generated
-  - `private`, if true the encode/decode function are defined as private without docstrings
+  - `private`, if true the encode/decode functions are defined as private without docstrings
   - `pattern`, if defined it is inserted as encode/decode first function argument
 
-  The `name` argument is used to construct function names to be defined as:
-  - `\#{name}encode(kw)`, and
-  - `\#{name}decode(offset, bin)`
-  If in some module M with only 1 simplex construction, using `name=""` results in:
+  The `name` argument is used to construct function names to be defined as
+  `\#{name}encode(kw)` and `\#{name}decode(offset, bin)` respectively.
+  If some module M has only 1 simplex construction, using `name=""` will define:
   - `M.encode(kw)`
   - `M.decode(offset, bin)`
-  functions being defined.
 
   The `fields` argument must be a keyword list of fieldnames (atoms) that have calls to
-  `primitives` as their value, which is used to construct the bitstring match expression
+  [primitives](#primitives) as their value, which is used to construct the bitstring match expression
   for both the encoder as well as the decoder function.
 
 
