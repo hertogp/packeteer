@@ -440,10 +440,15 @@ defmodule Packeteer do
   - `M.encode(kw)`
   - `M.decode(offset, bin)`
 
-  The `fields` argument must be a keyword list of fieldnames (atoms) that have calls to
+  The `fields` argument must be a keyword list of field names (atoms) that have calls to
   [primitives](#primitives) as their value. This list is used to construct the
   bitstring match expression for both the encoder as well as the decoder
-  function.
+  function. Hence, the order of the fields in this list is significant and their
+  values must be either integers, floats or strings.
+
+  The `default` argument can be used to provide a list of `{:name, value}`-pairs used
+  as default values upon encoding.  The values should be literals that fit in the
+  intended field and be their own AST.
 
 
   """
