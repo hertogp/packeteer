@@ -311,8 +311,8 @@ defmodule Packeteer do
     # pattern matching:
     # - normal: x_encode(kw \\ [])
     # - fhead : x_encode(:something, kw \\ [])
-    arg = [{:\\, [], [{:kw, [], Packeteer}, []]}]
-    fh = opts[:encode_head]
+    arg = [{:kw, [], Packeteer}]
+    fh = opts[:pattern]
 
     if fh,
       do: [fh | arg],
@@ -325,8 +325,8 @@ defmodule Packeteer do
     # normal:  x_decode(offset \\ 0, bin)
     # fhead :  x_decode(:something, offset \\ 0, bin)
     # changes that to x_encode(:something, kw \\ []).  Useful if you
-    arg = [{:\\, [], [{:offset, [], Packeteer}, 0]}, {:bin, [], Packeteer}]
-    fh = opts[:decode_head]
+    arg = [{:offset, [], Packeteer}, {:bin, [], Packeteer}]
+    fh = opts[:pattern]
 
     if fh,
       do: [fh | arg],
@@ -402,11 +402,11 @@ defmodule Packeteer do
   end
 
   @doc """
-  A macro that creates `\#{name}encode` and `\#{name}decode` functions for given
+  Creates `\#{name}encode` and `\#{name}decode` functions for given
   `name`, _primitive_ `fields`-definition and some extra options.
 
   Arguments include
-  - `fields`, a mandatory keyword list of field definitions
+  - `fields`, a mandatory keyword list of field definitions containing only primitives
   - `defaults` is an optional (keyword) list defining default values for one or more fields
   - `before_encode`, a function that takes a keyword list and returns a (modified) keyword list
   - `after_decode`, an function that takes `offset`, `kw`, `bin` and returns them, possibly modified
@@ -418,7 +418,7 @@ defmodule Packeteer do
   defmacro simplex(name, opts) do
     IO.inspect({name, opts[:private]}, label: :simplex_called)
     qq = do_simplex(name, opts)
-    # IO.inspect(qq, label: :defpd)
+    IO.puts(Macro.to_string(qq))
     qq
   end
 
@@ -556,7 +556,7 @@ defmodule Packeteer do
         end
       end
 
-    IO.puts(Macro.to_string(q))
+    # IO.puts(Macro.to_string(q))
     q
   end
 
