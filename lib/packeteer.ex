@@ -9,17 +9,16 @@ defmodule Packeteer do
   # [[ PRIMITIVES ]]
 
   @doc """
-  Returns a quoted fragment for an unsigned integer for given `size`.
+  Returns a quoted fragment for an unsigned integer for given `size` in _bits_.
 
-  The `size` argument specifies the number of bits that will be matched.
-  The fragment is used as the right hand side of an unsigned integer segment
-  in a bit syntax expression.
+  The `size` argument can be a simple expression like `:a * 8` (yielding an integer) when `:a` is an
+  earlier field that decodes an integer.
 
   Pass in an optional second argument (:little or :native) if the
   default doesn't suit your needs.
 
-  Can only be used as the field definition for a named field in a
-  call to either `simplex/2` or `complex/2`.
+  The fragment is used as the right hand side of an unsigned integer segment
+  in a bitstring match expression.
 
   """
   @doc section: :fragment
@@ -30,12 +29,16 @@ defmodule Packeteer do
   end
 
   @doc """
-  Returns quoted fragment for an signed integer for given `size`.
+  Returns a quoted fragment for an signed integer for given `size` in _bits_.
 
-  The `size` argument specifies the number of bits that will be matched.
+  The `size` argument can be a simple expression like `:a * 8` when `:a` is an
+  earlier field that decodes an integer.
 
   Pass in an optional second argument (`:little` or `:native`) if the
   default doesn't suit your needs.
+
+  The fragment is used as the right hand side of a signed integer segment
+  in a bitstring match expression.
 
   """
   @doc section: :fragment
@@ -46,13 +49,15 @@ defmodule Packeteer do
   end
 
   @doc """
-  Returns quoted fragment for a float for given `size`.
+  Returns quoted fragment for a float for given `size` in _bits_.
 
-  The `size` argument specifies the number of bits that will be matched
-  and must be in `[16, 32, 64]`.
+  The `size` argument must be one of `[16, 32, 64]`.
 
   Pass in an optional second argument (`:little` or `:native`) if the
   default doesn't suit your needs.
+
+  The fragment is used as the right hand side of a float segment
+  in a bitstring match expression.
 
   """
   @doc section: :fragment
@@ -74,10 +79,14 @@ defmodule Packeteer do
   end
 
   @doc """
-  Returns a quoted fragment for a binary of given `size`.
+  Returns a quoted fragment for a binary of given `size` in _bytes_.
 
-  The `size` argument specifies the number of bytes to match.
-  When omitted, matches the remaining _bytes_.
+  The `size` argument can be a simple expression like `:a * 8` when `:a` is an
+  earlier field that decodes an integer. When omitted, matches the remaining
+  bytes.
+
+  The fragment is used as the right hand side of a binary segment
+  in a bitstring match expression.
 
   """
   @doc section: :fragment
@@ -96,10 +105,14 @@ defmodule Packeteer do
   end
 
   @doc """
-  Returns a quoted fragment for bitstring of given `size`.
+  Returns a quoted fragment for a bitstring of given `size` in _bits_.
 
-  The `size` argument specifies the number of bits to match.
-  When omitted, matches the remaining _bits_.
+  The `size` argument can be a simple expression like `:a * 8` when `:a` is an
+  earlier field that decodes an integer. When omitted, matches the remaining
+  bits.
+
+  The fragment is used as the right hand side of a bitstring segment
+  in a bitstring match expression.
 
   """
   @doc section: :fragment
@@ -109,9 +122,9 @@ defmodule Packeteer do
   @doc """
   Returns a quoted fragment for a utf8 codepoint.
 
-  utf8 codepoints are encoded in (or decoded from) 1..4 bytes.
-  The bitsyntax only supports an endianness modifier, so this can encode
-  or decode only 1 utf codepoint at a time.
+  utf8 codepoints are encoded in (or decoded from) 1..4 bytes. The bitsyntax
+  only supports an endianness modifier, so this can encode or decode only 1 utf
+  codepoint at a time.
 
   The default for `endian` is `:big`, pass in either `:little` or `native`
   as appropiate.
