@@ -470,14 +470,20 @@ defmodule Packeteer do
   or not docstrings are generated for the encode/decode functions. By default
   these functions are generated as public functions, setting `docstr` to
   `false` allows for eliminating them from documentation while still be
-  available as public functions of your en/decoder module.
+  available as public functions in your en/decoder module.
 
   The `private` option, either `true` or `false`, determines whether the
   encode/decode functions are defined as private or public functions. If
   `true`, no docstrings will be generated regardless of the `docstr` option's
   value.
 
-
+  Lastly, the `pattern` option allows for including a literal as the first
+  argument of the encode/decode functions being generated.  That allows for
+  a encoder/decoder module to provide it's own `M.encode/1` and `M.decode/3`
+  functions that use its private `M.encode/2`, `M.decode/4` private functions
+  relying on pattern matching to call the right encoder/decoder.  This assumes
+  you'll have multiple calls to the `simplex` function using different values
+  for the pattern option.
 
   """
   # See: https://elixirforum.com/t/how-do-i-write-a-macro-that-dynamically-defines-a-public-or-private-function/14351
