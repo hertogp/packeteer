@@ -6,14 +6,6 @@ defmodule Packeteer do
 
   @primitives [:uint, :sint, :float, :bytes, :binary, :bits, :bitstring, :utf8, :utf16, :utf32]
 
-  # [[ HELPERS ]]
-
-  defp all?(fields) do
-    # returns true if expression matches all bits
-    {_name, {fld, _, arg}} = List.last(fields)
-    fld in [:bits, :bitstring, :bytes, :binary] and arg in [[], [nil]]
-  end
-
   # [[ PRIMITIVES ]]
 
   @doc """
@@ -160,7 +152,18 @@ defmodule Packeteer do
   def utf32(endian \\ :big),
     do: quote(do: utf32 - unquote(endian))
 
-  # [[ BITSTR EXPRESSION ]]
+  # [[ HELPERS ]]
+
+  defp all?(fields) do
+    # returns true if expression matches all bits
+    {_name, {fld, _, arg}} = List.last(fields)
+    fld in [:bits, :bitstring, :bytes, :binary] and arg in [[], [nil]]
+  end
+
+  # [[ FRAGMENTS ]]
+  # - bit syntax:  <<var::spec, ..>>
+  # - var::spec is a segment of the bit syntax expression
+  # - spec if a fragment: the rhs of the segment.
 
   # turns atom's into var in an expression
   defp walk(ast) do
@@ -276,6 +279,7 @@ defmodule Packeteer do
   # [[ SIMPLEX GENERATOR ]]
 
   defp before_encode(fun) do
+    # return ast (or not) that calls the specified {before_encode: fun}
     if fun do
       quote do
         kw = unquote(fun).(kw)
@@ -284,6 +288,7 @@ defmodule Packeteer do
   end
 
   defp after_decode(fun) do
+    # return ast (or not) that calls the specified {after_decode: fun}
     if fun do
       quote do
         {offset, kw, bin} = unquote(fun).(offset, kw, bin)
@@ -292,6 +297,8 @@ defmodule Packeteer do
   end
 
   defp maybe_skip(all?) do
+    # return ast the adds hidden :skip__ field to always match rest bits
+    # unless the field spec already has last field matching all bits
     unless all? do
       quote do
         kw = Keyword.put(kw, :skip__, "")
@@ -300,8 +307,10 @@ defmodule Packeteer do
   end
 
   defp maybe_fhead(:encode_head, opts) do
-    # normal: x_encode(kw \\ [])
-    # fhead : x_encode(:something, kw \\ [])
+    # return ast for encoder func args, optionally with extra 1st arg for
+    # pattern matching:
+    # - normal: x_encode(kw \\ [])
+    # - fhead : x_encode(:something, kw \\ [])
     arg = [{:\\, [], [{:kw, [], Packeteer}, []]}]
     fh = opts[:encode_head]
 
@@ -311,6 +320,8 @@ defmodule Packeteer do
   end
 
   defp maybe_fhead(:decode_head, opts) do
+    # return ast for decoder func args, optionally with extra 1st arg for
+    # pattern matching:
     # normal:  x_decode(offset \\ 0, bin)
     # fhead :  x_decode(:something, offset \\ 0, bin)
     # changes that to x_encode(:something, kw \\ []).  Useful if you
@@ -323,6 +334,7 @@ defmodule Packeteer do
   end
 
   defp do_simplex(name, opts) do
+    # build the entire ast for the simplex macro to use
     opts = Keyword.put_new(opts, :docstr, true)
     fields = opts[:fields]
     values = opts[:defaults] || []
@@ -378,7 +390,7 @@ defmodule Packeteer do
   end
 
   defp do_defp(ast) do
-    # makes public functions private
+    # take the ast and turn all public functions into private functions
     Macro.prewalk(ast, fn
       {:def, x, y} -> {:defp, x, y}
       other -> other
@@ -387,7 +399,7 @@ defmodule Packeteer do
 
   @doc """
   A macro that creates `\#{name}encode` and `\#{name}decode` functions for given
-  `name`, `fields`-definitions and some extra options.
+  `name`, _primitive_ `fields`-definition and some extra options.
 
   Arguments include
   - `fields`, a mandatory keyword list of field definitions
@@ -408,40 +420,49 @@ defmodule Packeteer do
 
   # [[ COMPLEX GENERATOR ]]
 
-  defp f_type({_field, v}) do
+  defp f_type({_fieldname, v}) do
+    # check type of value for a given field
+    # - :p means it is a primitive
+    # - :f means a user supplied function
     case elem(v, 0) do
       f when f in @primitives ->
         :p
 
       v ->
-        IO.inspect(v)
+        IO.inspect(v, label: :function_type)
         :f
         # _ ->
         #   raise "not a Packeteer field spec '#{field}: #{Macro.to_string(v)}'"
     end
   end
 
+  # group fields by type in order to turn consecutive primitives into a single
+  # private expression using bit syntax (i.e. a single simplex encoder/decoder)
+  # returns {funcs, defs}
+  # - funcs, list of function calls, including new, private simplex en/decoder
+  # - defs, list of ast's that will define the private simplex en/decoders
   defp consolidate([], _opts, funcs, defs, _n),
     do: {funcs, defs}
 
   defp consolidate(fields, opts, [], [], 0) do
+    # this is where consolidation starts, only used by `do_complex`
     annotated_fields =
       for field <- fields do
         {f_type(field), field}
       end
       |> Enum.chunk_by(fn t -> elem(t, 0) end)
 
-    # IO.inspect(annotated_fields, label: :annotated_fields)
     consolidate(annotated_fields, opts, [], [], 1)
   end
 
   defp consolidate([[{:f, _} | _] = h | tail], opts, funcs, defs, n) do
-    flist = for {:f, f} <- h, do: f
     # plain func calls, so move on
+    flist = for {:f, f} <- h, do: f
     consolidate(tail, opts, funcs ++ flist, defs, n + 1)
   end
 
   defp consolidate([[{:p, _} | _] = h | tail], opts, funcs, defs, n) do
+    # turn list of primitives into single simplex encoder/decoder pair
     plist = for {:p, p} <- h, do: p
     klist = for {k, _} <- plist, do: k
     name = String.to_atom("#{opts[:name]}_part_#{n}_")
@@ -470,7 +491,12 @@ defmodule Packeteer do
     consolidate(tail, opts, funcs, defs, n + 1)
   end
 
-  # TODO
+  @doc """
+  A macro that creates \#{name}encode and \#{name}decode functions for given
+  name, _complex_ `fields`-definition and some extra options.
+
+
+  """
   defmacro complex(name, opts) do
     opts = Keyword.put_new(opts, :name, name)
     encode = String.to_atom("#{opts[:name]}encode")
