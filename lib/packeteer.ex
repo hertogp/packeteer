@@ -423,7 +423,7 @@ defmodule Packeteer do
   end
 
   @doc """
-  Creates `encode` and `decode` functions for given `name`, _primitive_
+  Creates an `encode` and `decode` function for given `name`, _primitive_
   `fields`-definition and some extra options.
 
   The `encode/1` function takes a keyword list of `{:name, value}`-pairs
@@ -431,7 +431,7 @@ defmodule Packeteer do
   option if you need a `encode/2` function for pattern matching instead.
 
   The `decode/2` function takes an `offset` and `binary` and returns either an
-  `{;error, reason}`-tuple or a 3-tuple `{offset, kw, bin}`.  Where:
+  `{:error, reason}`-tuple or a 3-tuple `{offset, kw, bin}`.  Where:
   - `offset` is where decoding of `bin` left off,
   - `kw` is the list of `{:name, value}` pairs decoded from `bin`
   - `bin` is the binary being decoded.
@@ -443,9 +443,9 @@ defmodule Packeteer do
   - `defaults`, an optional (keyword) list defining default values for one or more fields
   - `before_encode`, a function that takes a keyword list and returns a (modified) keyword list
   - `after_decode`, an function that takes `offset`, `kw`, `bin` and returns them, possibly modified
-  - `docstr`, if true docstrings will be generated
-  - `private`, if true the encode/decode functions are defined as private without docstrings
-  - `pattern`, if defined it is inserted as the argument of the encode/decode functions
+  - `docstr`, if true, docstrings will be generated (but see `private`)
+  - `private`, if true, the encode/decode functions are defined as private without docstrings
+  - `pattern`, if defined, its value is inserted as the argument of the encode/decode functions
 
   The `name` argument is used to construct function names to be defined as
   `\#{name}encode(kw)` and `\#{name}decode(offset, bin)` respectively.
