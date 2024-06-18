@@ -333,8 +333,17 @@ defmodule Packeteer do
       else: arg
   end
 
+  defp do_defp(ast) do
+    # take the ast and turn all public functions into private functions
+    Macro.prewalk(ast, fn
+      {:def, x, y} -> {:defp, x, y}
+      other -> other
+    end)
+  end
+
   defp do_simplex(name, opts) do
     # build the entire ast for the simplex macro to use
+    # [ ] use private to decide whether to generate docstrings or not instead of docstr
     opts = Keyword.put_new(opts, :docstr, true)
     fields = opts[:fields]
     values = opts[:defaults] || []
@@ -357,44 +366,39 @@ defmodule Packeteer do
     codec = fragments(fields)
     binds = bindings(fields)
 
-    quote do
-      @doc unquote(encode_doc)
-      def unquote(encode_fun)(unquote_splicing(encode_args)) when is_list(kw) do
-        try do
-          unquote(before_encode)
-          kw = Keyword.merge(unquote(values), kw)
-          unquote(maybe_skip)
-          unquote_splicing(binds)
-          unquote(codec)
-        rescue
-          error -> {:error, Exception.message(error)}
+    qq =
+      quote do
+        @doc unquote(encode_doc)
+        def unquote(encode_fun)(unquote_splicing(encode_args)) when is_list(kw) do
+          try do
+            unquote(before_encode)
+            kw = Keyword.merge(unquote(values), kw)
+            unquote(maybe_skip)
+            unquote_splicing(binds)
+            unquote(codec)
+          rescue
+            error -> {:error, Exception.message(error)}
+          end
+        end
+
+        @doc unquote(decode_doc)
+        def unquote(decode_fun)(unquote_splicing(decode_args)) when is_binary(bin) do
+          try do
+            <<_::bits-size(offset), rest::bits>> = bin
+            unquote(codec) = rest
+            kw = Enum.zip(unquote(keys), unquote(vars))
+            skipped = kw[:skip__] || <<>>
+            offset = offset + bit_size(bin) - bit_size(skipped)
+            kw = Keyword.delete(kw, :skip__)
+            unquote(after_decode)
+            {offset, kw, bin}
+          rescue
+            error -> {:error, Exception.message(error)}
+          end
         end
       end
 
-      @doc unquote(decode_doc)
-      def unquote(decode_fun)(unquote_splicing(decode_args)) when is_binary(bin) do
-        try do
-          <<_::bits-size(offset), rest::bits>> = bin
-          unquote(codec) = rest
-          kw = Enum.zip(unquote(keys), unquote(vars))
-          skipped = kw[:skip__] || <<>>
-          offset = offset + bit_size(bin) - bit_size(skipped)
-          kw = Keyword.delete(kw, :skip__)
-          unquote(after_decode)
-          {offset, kw, bin}
-        rescue
-          error -> {:error, Exception.message(error)}
-        end
-      end
-    end
-  end
-
-  defp do_defp(ast) do
-    # take the ast and turn all public functions into private functions
-    Macro.prewalk(ast, fn
-      {:def, x, y} -> {:defp, x, y}
-      other -> other
-    end)
+    if opts[:private], do: do_defp(qq), else: qq
   end
 
   @doc """
@@ -412,8 +416,8 @@ defmodule Packeteer do
   # See: https://elixirforum.com/t/how-do-i-write-a-macro-that-dynamically-defines-a-public-or-private-function/14351
   # - howto dynamically generate def or defp functions
   defmacro simplex(name, opts) do
+    IO.inspect({name, opts[:private]}, label: :simplex_called)
     qq = do_simplex(name, opts)
-    qq = if opts[:private], do: do_defp(qq), else: qq
     # IO.inspect(qq, label: :defpd)
     qq
   end
@@ -424,16 +428,11 @@ defmodule Packeteer do
     # check type of value for a given field
     # - :p means it is a primitive
     # - :f means a user supplied function
-    case elem(v, 0) do
-      f when f in @primitives ->
-        :p
-
-      v ->
-        IO.inspect(v, label: :function_type)
-        :f
-        # _ ->
-        #   raise "not a Packeteer field spec '#{field}: #{Macro.to_string(v)}'"
-    end
+    if elem(v, 0) in @primitives, do: :p, else: :f
+    # case elem(v, 0) do
+    #   f when f in @primitives -> :p
+    #   _ -> :f
+    # end
   end
 
   # group fields by type in order to turn consecutive primitives into a single
@@ -465,64 +464,70 @@ defmodule Packeteer do
     # turn list of primitives into single simplex encoder/decoder pair
     plist = for {:p, p} <- h, do: p
     klist = for {k, _} <- plist, do: k
-    name = String.to_atom("#{opts[:name]}_part_#{n}_")
 
-    values = Keyword.take(opts[:values], klist)
+    # private func name xxx_part_<n>_encode/decode
+    name = String.to_atom("#{opts[:name]}_simplex_#{n}_")
+    encode = String.to_atom("#{name}encode")
+    decode = String.to_atom("#{name}decode")
+
+    # take fields and defaults for these primitives from the given `opts`
     fields = Keyword.take(opts[:fields], klist)
+    values = Keyword.take(opts[:defaults], klist)
 
-    bbdef = {name, fields: fields, values: values, docstr: false}
+    # assemble args for simplex call later on
+    bbdef = {name, fields: fields, defaults: values, docstr: false, private: true}
     # IO.inspect({n, bbdef}, label: :hmm)
 
-    encode = String.to_atom("#{name}encode_")
-    decode = String.to_atom("#{name}decode_")
-
+    # can't use quote do &(encode/2) end, for some reason..
     call_enc =
-      quote do
-        &(__MODULE__.unquote(encode) / 2)
-      end
+      {:&, [],
+       [
+         {:/, [context: Elixir, imports: [{2, Kernel}]], [{encode, [], nil}, 1]}
+       ]}
 
     call_dec =
-      quote do
-        &(__MODULE__.unquote(decode) / 2)
-      end
+      {:&, [],
+       [
+         {:/, [context: Elixir, imports: [{2, Kernel}]], [{decode, [], nil}, 2]}
+       ]}
 
-    funcs = funcs ++ [{name, {call_enc, call_dec}}]
+    # add consolidated primitives as single simplex expr to list of funcs
+    # add simplex args to the list of definitions for later ast generation
+    funcs = funcs ++ [{:simplex, {call_enc, call_dec}}]
     defs = defs ++ [bbdef]
     consolidate(tail, opts, funcs, defs, n + 1)
   end
 
-  @doc """
-  A macro that creates \#{name}encode and \#{name}decode functions for given
-  name, _complex_ `fields`-definition and some extra options.
-
-
-  """
-  defmacro complex(name, opts) do
+  defp do_complex(name, opts) do
+    # return the ast for complex macro to use
+    # opts[:name] is for possible later use when consolidating primitives
     opts = Keyword.put_new(opts, :name, name)
     encode = String.to_atom("#{opts[:name]}encode")
     decode = String.to_atom("#{opts[:name]}decode")
     fields = opts[:fields]
-    # values = opts[:values]
+    values = opts[:defaults] || []
     join = opts[:join]
 
     {fields, defs} =
       consolidate(fields, opts, [], [], 0)
 
-    bbs =
-      for {name, args} <- defs do
-        do_bb(name, args)
-        # IO.inspect(ast, label: :ast)
-      end
+    IO.inspect(defs, label: :defs)
+
+    simplex_funcs =
+      for {name, args} <- defs,
+          do: do_simplex(name, args)
 
     q =
       quote do
-        for bb <- unquote(bbs),
-            do: bb
+        unquote_splicing(simplex_funcs)
 
         def unquote(encode)(kw \\ []) do
+          kw = Keyword.merge(unquote(values), kw)
+
           encoded_kw =
             for {field, {encode, _}} <- unquote(fields) do
-              {field, encode.(field, kw[field])}
+              IO.inspect({field, kw}, label: :kw)
+              {field, encode.(kw[field] || [])}
             end
 
           if unquote(join),
@@ -535,6 +540,7 @@ defmodule Packeteer do
             Enum.reduce(unquote(fields), %{offset: offset, bin: bin, kw: []}, fn e, acc ->
               {field, {_, decode}} = e
               {offset, value, bin} = decode.(acc.offset, acc.bin)
+              IO.inspect({offset, field, value}, label: :field_value)
 
               acc
               |> Map.put(:offset, offset)
@@ -542,7 +548,14 @@ defmodule Packeteer do
               |> Map.put(:kw, Keyword.put(acc.kw, field, value))
             end)
 
-          {map.offset, map.kw, map.bin}
+          kw =
+            Enum.reverse(map.kw)
+            |> Enum.reduce([], fn
+              {:simplex, v}, acc -> acc ++ v
+              {k, v}, acc -> acc ++ [{k, v}]
+            end)
+
+          {map.offset, kw, map.bin}
         end
       end
 
@@ -550,57 +563,14 @@ defmodule Packeteer do
     q
   end
 
-  @doc false
-  defmacro bb(name, args) do
-    quote do
-      unquote(do_bb(name, args))
-    end
-  end
+  @doc """
+  A macro that creates \#{name}encode and \#{name}decode functions for given
+  name, _complex_ `fields`-definition and some extra options.
 
-  def do_bb(name, opts) do
-    encode = String.to_atom("#{name}encode")
-    decode = String.to_atom("#{name}decode")
 
-    fields = opts[:fields]
-    values = opts[:values] || []
-
-    encode_doc = if opts[:docstr], do: docstring(:encode, fields, values), else: "@doc false"
-    encode_fun = opts[:encode]
-    decode_doc = if opts[:docstr], do: docstring(:decode, fields, values), else: "@doc false"
-    decode_fun = opts[:decode]
-
-    all? = all?(fields)
-    fields = if all?, do: fields, else: fields ++ [{:skip__, {:bits, [], []}}]
-    keys = Enum.map(fields, fn {k, _} -> k end)
-    vars = Enum.map(keys, fn k -> var(k) end)
-
-    codec = fragments(fields)
-    binds = bindings(fields)
-
-    quote do
-      @doc unquote(decode_doc)
-      def unquote(decode)(offset \\ 0, bin) do
-        <<_::bits-size(offset), rest::bits>> = bin
-        unquote(codec) = rest
-        kw = Enum.zip(unquote(keys), unquote(vars))
-        skipped = kw[:skip__] || <<>>
-        offset = offset + bit_size(bin) - bit_size(skipped)
-        kw = Keyword.delete(kw, :skip__)
-        fun = unquote(decode_fun)
-        kw = if fun, do: fun.(offset, kw), else: kw
-        {offset, kw, bin}
-      end
-
-      @doc unquote(encode_doc)
-      def unquote(encode)(kw \\ []) when is_list(kw) do
-        fun = unquote(encode_fun)
-        kw = Keyword.merge(unquote(values), kw)
-        kw = if fun, do: fun.(kw), else: kw
-        kw = if unquote(all?), do: kw, else: Keyword.put(kw, :skip__, "")
-        # introduce required var bindings to kw entries
-        unquote_splicing(binds)
-        unquote(codec)
-      end
-    end
+  """
+  defmacro complex(name, opts) do
+    qq = do_complex(name, opts)
+    if opts[:private], do: do_defp(qq), else: qq
   end
 end
