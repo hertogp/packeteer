@@ -540,22 +540,19 @@ defmodule Packeteer do
             Enum.reduce(unquote(fields), %{offset: offset, bin: bin, kw: []}, fn e, acc ->
               {field, {_, decode}} = e
               {offset, value, bin} = decode.(acc.offset, acc.bin)
-              IO.inspect({offset, field, value}, label: :field_value)
+
+              kw =
+                if field == :simplex,
+                  do: acc.kw ++ value,
+                  else: acc.kw ++ [{field, value}]
 
               acc
               |> Map.put(:offset, offset)
               |> Map.put(:bin, bin)
-              |> Map.put(:kw, Keyword.put(acc.kw, field, value))
+              |> Map.put(:kw, kw)
             end)
 
-          kw =
-            Enum.reverse(map.kw)
-            |> Enum.reduce([], fn
-              {:simplex, v}, acc -> acc ++ v
-              {k, v}, acc -> acc ++ [{k, v}]
-            end)
-
-          {map.offset, kw, map.bin}
+          {map.offset, map.kw, map.bin}
         end
       end
 
