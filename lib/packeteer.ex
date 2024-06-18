@@ -445,7 +445,7 @@ defmodule Packeteer do
   - `after_decode`, an function that takes `offset`, `kw`, `bin` and returns them, possibly modified
   - `docstr`, if true, docstrings will be generated (but see `private`)
   - `private`, if true, the encode/decode functions are defined as private without docstrings
-  - `pattern`, if defined, its value is inserted as the argument of the encode/decode functions
+  - `pattern`, if defined, its value is inserted as the first argument of the encode/decode functions
 
   The `name` argument is used to construct function names to be defined as
   `\#{name}encode(kw)` and `\#{name}decode(offset, bin)` respectively.
