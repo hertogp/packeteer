@@ -427,15 +427,17 @@ defmodule Packeteer do
   `fields`-definition and some extra options.
 
   The following functions are defined:
-  - `\#{name}encode/1` or `\#{name}encode/2`, the encode function.
-  - `\#{name}decode/2` or `\#{name}decode/3`, the decode function.
+  - `\#{name}encode/1` and `\#{name}decode/2`, or
+  - `\#{name}encode/2` and `\#{name}decode/3`
+
+  referred to below as the encode resp. decode function.
 
   The `encode/1` function takes a keyword list of `{:name, value}`-pairs
-  and returns either a binary or an `{error, message}`-tuple.  See the
+  and returns either a binary or an `{error, reason}`-tuple.  See the
   `pattern` option if you need an `encode/2` function instead.
 
   The `decode/2` function takes an `offset` and `bin` (binary) and returns
-  either an `{:error, reason}`-tuple or a 3-tuple `{offset, kw, bin}`.  Where:
+  either a 3-tuple `{offset, kw, bin}` or an `{:error, reason}`-tuple.  Where:
   - `offset` is where decoding of `bin` left off,
   - `kw` is the list of `{:name, value}` pairs decoded from `bin`
   - `bin` is the binary being decoded.
