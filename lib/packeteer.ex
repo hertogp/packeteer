@@ -519,7 +519,7 @@ defmodule Packeteer do
       ...> \"""
       iex> [{m, _}] = Code.compile_string(mod)
       iex> bin = m.encode(len: 4, val: 65535) <> "the rest"
-      iex> <<4, 255, 255, "the rest">>
+      <<4, 255, 255, "the rest">>
       iex> m.decode(0, bin)
       {24, [len: 4, val: 65535], <<4, 255, 255, "the rest">>}
       iex> <<_::bits-size(24), rest::binary>> = bin
