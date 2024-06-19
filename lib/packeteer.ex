@@ -513,13 +513,12 @@ defmodule Packeteer do
       ...>        len: uint(8),
       ...>        val: uint(:len * 4)
       ...>     ],
-      ...>  docstr: false,
+      ...>  docstr: false
       ...>  )
       ...> end
       ...> \"""
       iex> [{m, _}] = Code.compile_string(mod)
-      iex> bin = m.encode(len: 4, val: 65535)
-      iex> bin
+      iex> bin = m.encode(len: 4, val: 65535) <> "the rest"
       iex> <<4, 255, 255, "the rest">>
       iex> m.decode(0, bin)
       {24, [len: 4, val: 65535], <<4, 255, 255, "the rest">>}
