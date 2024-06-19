@@ -428,87 +428,67 @@ defmodule Packeteer do
 
   The simplex function takes a `name` and `opts` (a list of options that must
   include a `fields` entry). Using that list of [primitive](#primitve) field
-  definitions, it creates the following encode/decode functions:
+  definitions, it defines the following encode/decode functions in the calling
+  module:
   - `\#{name}encode/1` and `\#{name}decode/2`, or
   - `\#{name}encode/2` and `\#{name}decode/3`
 
+  whose signatures (assuming name is "name_") are:
+  ```
+  name_encode(Keyword.t) :: binary | {:error, binary}
+  name_decode(non_neg_integer, binary) :: {non_neg_integer, Keyword.t, binary} | {:error, binary}
+  # or
+  name_encode(atom, Keyword.t) :: binary | {:error, binary}
+  name_decode(atom, non_neg_integer, binary) :: {non_neg_integer, Keyword.t, binary} | {:error, binary}
+  ```
 
-  The `encode/1` function takes a keyword list of `{:name, value}`-pairs
-  and returns either a binary or an `{error, reason}`-tuple.  See the
-  `pattern` option if you need an `encode/2` function instead.
-
-  The `decode/2` function takes an `offset` and `bin` (binary) and returns
-  either a 3-tuple `{offset, kw, bin}` or an `{:error, reason}`-tuple.  Where:
-  - `offset` is where decoding of `bin` left off,
-  - `kw` is the list of `{:name, value}` pairs decoded from `bin`
-  - `bin` is the binary being decoded.
-
-  Again, see the `pattern` option for creating a `decode/4` function.
-
-  The `name` argument is used to construct function names to be defined as
-  `\#{name}encode(kw)` and `\#{name}decode(offset, bin)` respectively.
-  If some module M has only 1 simplex construction, using `name=""` will define:
+  If some module M has only a single call to `simplex/2`, using `name = ""` will define:
   - `M.encode(kw)`
   - `M.decode(offset, bin)`
 
-  The `fields` argument must be a keyword list of field names (atoms) that have
-  calls to [primitives](#primitives) as their value. This list is used to
-  construct the bitstring match expression for both the encoder as well as the
-  decoder function. Hence, the order of the fields in this list is significant.
-  Use unique field names for best encoding results.
+  The `fields` list of field definitions is used to construct the bitstring
+  match expression for both the encode and decode function. Hence,
+  the order of field definitons in this list is significant.
 
-  The optional extra arguments include:
-  - `defaults`, a keyword list defining default values for one or more fields
-  - `before_encode`, a function that takes a keyword list and returns a (modified) keyword list
-  - `after_decode`, an function that takes `offset`, `kw`, `bin` and returns them, possibly modified
-  - `docstr`, if true, docstrings will be generated (but see `private`)
-  - `private`, if true, the encode/decode functions are defined as private without docstrings
-  - `pattern`, if defined, its value is inserted as the first argument of the encode/decode functions
+  Possible extra options include:
 
-  The `defaults` optional argument is a keyword list, specifying the default
-  values for fields used by the encode function when
+  - `:defaults`, a keyword list, specifying the default values for one or more
+  fields used by the encode function when called with an incomplete list of fields
+  and values.  Note that fields with the same name will encode to the first default
+  value given the nature of keyword lists.
 
-  can be used to provide a list of `{:name,
-  value}`-pairs used as default values upon encoding.  The values should be
-  literals that fit in the intended field and be either integers, floats or
-  strings.  When encoding, fields are encoded in the order listed in the
-  `fields` keyword list but their default value is retrieved from this `defaults`
-  list based on their name.  Hence, all fields with the same name will get the
-  value of the first occurrence of that field in this list.  Any fields _not_
-  listed in `defaults`, _must_ be present in the keyword list argument in a
-  call to the encode function to avoid an error.
+  - `:before_encode`, either an anonymous function or a function reference
+  whose signature is
+  ```
+  fun(Keyword.t) :: Keyword.t
+  ```
+  If specified, this function will be called with the original keyword arguments
+  supplemented with any default values for fields that were omitted in the call
+  to the encode function, prior to the actual encoding.
 
-  The `before_encode` option can be an anonymous function or a function
-  reference. That function must have the signature `(Keyword.t) :: Keyword.t`.
-  It allows, e.g., for mapping symbolic values in the encode's keyword list
-  argument to their numeric counterpart prior to being encoded.
+  - `:after_decode`, either an anonymous function or a function reference whose
+  signature is
+  ```
+  fun(non_neg_integer, Keyword.t, binary) :: (non_neg_integer, Keyword.t, binary)
+  ```
+  If specified, this function will be called with the results of decoding and its
+  return values will be used as the final result of the decoder function.
 
-  Similarly, the `after_decode` option allows for mapping numeric values to
-  their symbolic counter part.  Again, either an anonymous function or function
-  reference. That function's signature is `(non_neg_integer, Keyword.t, binary)
-  :: {non_neg_integer, Keyword.t, binary}`.  If it performs additional decoding
-  and adding or skipping fields in the binary, the returned `non_neg_integer`
-  (i.e. the offset) should point to the remaining part of the binary yet to be decoded.
+  - `:docstr`, either `true` (the default) or `false`, specify whether
+  or not docstrings are to be generated for the encode/decode functions. By
+  default the encode/decode functions are generated as public functions,
+  setting `docstr` to `false` allows for eliminating them from documentation
+  while still be available as public functions in your en/decoder module.
 
-  The `docstr` option, either `true` or `false`, is used to determine whether
-  or not docstrings are generated for the encode/decode functions. By default
-  these functions are generated as public functions, setting `docstr` to
-  `false` allows for eliminating them from documentation while still be
-  available as public functions in your en/decoder module.
-
-  The `private` option, either `true` or `false`, determines whether the
+  - `:private`, either `true` or `false` (default), specify whether the
   encode/decode functions are defined as private or public functions. If
-  `true`, no docstrings will be generated regardless of the `docstr` option's
-  value.
+  `true`, this overrides the `:docstr` option without warning.
 
-  Lastly, the `pattern` option allows for including a literal as the first
-  argument of the encode/decode functions being generated.  That allows for
-  a encoder/decoder module to provide it's own `M.encode/1` and `M.decode/3`
-  functions that use its private `M.encode/2`, `M.decode/4` functions relying
-  on pattern matching to call the right encoder/decoder.  This assumes you'll
-  have multiple calls to the `simplex` function using different values for the
-  pattern option and possibly different layouts for the binary to be
-  encoded/decoded..
+  - `:pattern`, a literal that becomes the, additional, first argument of the
+  encode and decode functions.  Useful when creating multiple encode/decode
+  functions with the same name. Note that unless manually adding a catch all
+  version of the encode and decode function, `FunctionClauseError` might occur.
+
 
   """
   # See: https://elixirforum.com/t/how-do-i-write-a-macro-that-dynamically-defines-a-public-or-private-function/14351
@@ -564,6 +544,8 @@ defmodule Packeteer do
     klist = for {k, _} <- plist, do: k
 
     # private func name xxx_part_<n>_encode/decode
+    # TODO: perhaps use simplex_n, n = :System.unique_integer([:positive])
+    # because name might be ""
     name = String.to_atom("#{opts[:name]}_simplex_#{n}_")
     encode = String.to_atom("#{name}encode")
     decode = String.to_atom("#{name}decode")
