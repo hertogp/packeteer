@@ -423,13 +423,10 @@ defmodule Packeteer do
   end
 
   @doc """
-  Creates an `encode` and `decode` function for given `name`, _primitive_
-  `fields`-definition and some extra options.
+  Defines `encode`/`decode` functions for given `name` and `opts`, which
+  must include a list of [_primitive_](#primitives) fields.
 
-  The simplex function takes a `name` and `opts` (a list of options that must
-  include a `fields` entry). Using that list of [primitive](#primitve) field
-  definitions, it defines the following encode/decode functions in the calling
-  module:
+  `simplex/2` defines the following encode/decode functions in the calling module:
   - `\#{name}encode/1` and `\#{name}decode/2`, or
   - `\#{name}encode/2` and `\#{name}decode/3`
 
@@ -446,9 +443,10 @@ defmodule Packeteer do
   - `M.encode(kw)`
   - `M.decode(offset, bin)`
 
-  The `fields` list of field definitions is used to construct the bitstring
-  match expression for both the encode and decode function. Hence,
-  the order of field definitons in this list is significant.
+  - `:fields` a mandatory list of [primitive](#primitives) field definitions
+  used to construct the bitstring match expression for both the encode and
+  decode functions. Hence, the order of field definitons in this list is
+  significant.
 
   Possible extra options include:
 
