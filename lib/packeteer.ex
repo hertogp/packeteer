@@ -426,21 +426,24 @@ defmodule Packeteer do
   Creates an `encode` and `decode` function for given `name`, _primitive_
   `fields`-definition and some extra options.
 
-  The `encode/1` function takes a keyword list of `{:name, value}`-pairs
-  and returns either a binary or an `{error, message}`-tuple.  See the `pattern`
-  option if you need a `encode/2` function for pattern matching instead.
+  The following functions are defined:
+  - `\#{name}encode/1` or `\#{name}encode/2`, the encode function.
+  - `\#{name}decode/2` or `\#{name}decode/3`, the decode function.
 
-  The `decode/2` function takes an `offset` and `binary` and returns either an
-  `{:error, reason}`-tuple or a 3-tuple `{offset, kw, bin}`.  Where:
+  The `encode/1` function takes a keyword list of `{:name, value}`-pairs
+  and returns either a binary or an `{error, message}`-tuple.  See the
+  `pattern` option if you need an `encode/2` function instead.
+
+  The `decode/2` function takes an `offset` and `bin` (binary) and returns
+  either an `{:error, reason}`-tuple or a 3-tuple `{offset, kw, bin}`.  Where:
   - `offset` is where decoding of `bin` left off,
   - `kw` is the list of `{:name, value}` pairs decoded from `bin`
   - `bin` is the binary being decoded.
 
   Again, see the `pattern` option for creating a `decode/4` function.
 
-
-  Optional extra arguments include:
-  - `defaults`, an optional (keyword) list defining default values for one or more fields
+  The optional extra arguments include:
+  - `defaults`, a keyword list defining default values for one or more fields
   - `before_encode`, a function that takes a keyword list and returns a (modified) keyword list
   - `after_decode`, an function that takes `offset`, `kw`, `bin` and returns them, possibly modified
   - `docstr`, if true, docstrings will be generated (but see `private`)
@@ -453,13 +456,16 @@ defmodule Packeteer do
   - `M.encode(kw)`
   - `M.decode(offset, bin)`
 
-  The `fields` argument must be a keyword list of field names (atoms) that have calls to
-  [primitives](#primitives) as their value. This list is used to construct the
-  bitstring match expression for both the encoder as well as the decoder
-  function. Hence, the order of the fields in this list is significant and should be
-  unique for best encoding results.
+  The `fields` argument must be a keyword list of field names (atoms) that have
+  calls to [primitives](#primitives) as their value. This list is used to
+  construct the bitstring match expression for both the encoder as well as the
+  decoder function. Hence, the order of the fields in this list is significant.
+  Use unique field names for best encoding results.
 
-  The `defaults` argument can be used to provide a list of `{:name,
+  The `defaults` optional argument is a keyword list, specifying the default
+  values for fields used by the encode function when
+
+  can be used to provide a list of `{:name,
   value}`-pairs used as default values upon encoding.  The values should be
   literals that fit in the intended field and be either integers, floats or
   strings.  When encoding, fields are encoded in the order listed in the
