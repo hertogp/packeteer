@@ -333,10 +333,10 @@ defmodule Packeteer do
     # - normal: x_encode(kw \\ [])
     # - pattern : x_encode(:something, kw \\ [])
     arg = [{:kw, [], Packeteer}]
-    fh = opts[:pattern]
+    pat = opts[:pattern]
 
-    if fh,
-      do: [fh | arg],
+    if pat,
+      do: [pat | arg],
       else: arg
   end
 
@@ -347,10 +347,10 @@ defmodule Packeteer do
     # pattern :  x_decode(:something, offset \\ 0, bin)
     # changes that to x_encode(:something, kw \\ []).  Useful if you
     arg = [{:offset, [], Packeteer}, {:bin, [], Packeteer}]
-    fh = opts[:pattern]
+    pat = opts[:pattern]
 
-    if fh,
-      do: [fh | arg],
+    if pat,
+      do: [pat | arg],
       else: arg
   end
 
@@ -426,11 +426,12 @@ defmodule Packeteer do
   Creates an `encode` and `decode` function for given `name`, _primitive_
   `fields`-definition and some extra options.
 
-  The following functions are defined:
+  The simplex function takes a `name` and `opts` (a list of options that must
+  include a `fields` entry). Using that list of [primitive](#primitve) field
+  definitions, it creates the following encode/decode functions:
   - `\#{name}encode/1` and `\#{name}decode/2`, or
   - `\#{name}encode/2` and `\#{name}decode/3`
 
-  referred to below as the encode resp. decode function.
 
   The `encode/1` function takes a keyword list of `{:name, value}`-pairs
   and returns either a binary or an `{error, reason}`-tuple.  See the
@@ -444,14 +445,6 @@ defmodule Packeteer do
 
   Again, see the `pattern` option for creating a `decode/4` function.
 
-  The optional extra arguments include:
-  - `defaults`, a keyword list defining default values for one or more fields
-  - `before_encode`, a function that takes a keyword list and returns a (modified) keyword list
-  - `after_decode`, an function that takes `offset`, `kw`, `bin` and returns them, possibly modified
-  - `docstr`, if true, docstrings will be generated (but see `private`)
-  - `private`, if true, the encode/decode functions are defined as private without docstrings
-  - `pattern`, if defined, its value is inserted as the first argument of the encode/decode functions
-
   The `name` argument is used to construct function names to be defined as
   `\#{name}encode(kw)` and `\#{name}decode(offset, bin)` respectively.
   If some module M has only 1 simplex construction, using `name=""` will define:
@@ -463,6 +456,14 @@ defmodule Packeteer do
   construct the bitstring match expression for both the encoder as well as the
   decoder function. Hence, the order of the fields in this list is significant.
   Use unique field names for best encoding results.
+
+  The optional extra arguments include:
+  - `defaults`, a keyword list defining default values for one or more fields
+  - `before_encode`, a function that takes a keyword list and returns a (modified) keyword list
+  - `after_decode`, an function that takes `offset`, `kw`, `bin` and returns them, possibly modified
+  - `docstr`, if true, docstrings will be generated (but see `private`)
+  - `private`, if true, the encode/decode functions are defined as private without docstrings
+  - `pattern`, if defined, its value is inserted as the first argument of the encode/decode functions
 
   The `defaults` optional argument is a keyword list, specifying the default
   values for fields used by the encode function when
