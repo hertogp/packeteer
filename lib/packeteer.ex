@@ -625,7 +625,7 @@ defmodule Packeteer do
     decode = String.to_atom("#{opts[:name]}decode")
     fields = opts[:fields]
     values = opts[:defaults] || []
-    join = opts[:join]
+    # join = opts[:join]
 
     {fields, defs} = consolidate(fields, opts)
 
@@ -640,20 +640,22 @@ defmodule Packeteer do
         def unquote(encode)(kw \\ []) do
           kw = Keyword.merge(unquote(values), kw)
 
-          encoded_kw =
-            for {field, {encode, _}} <- unquote(fields) do
-              {field, encode.(kw[field] || [])}
-            end
-
-          if unquote(join),
-            do: Keyword.values(encoded_kw) |> Enum.join(),
-            else: encoded_kw
+          for {field, {encode, _}} <- unquote(fields) do
+            # {field, encode.(kw[field] || [])}
+            if field == :fixed,
+              do: {field, encode.(kw)},
+              else: {field, encode.(field, kw[field])}
+          end
+          |> Keyword.values()
+          |> Enum.join()
         end
 
         def unquote(decode)(offset, bin) do
+          state = %{offset: offset, bin: bin, kw: []}
+
           map =
-            Enum.reduce(unquote(fields), %{offset: offset, bin: bin, kw: []}, fn e, acc ->
-              {field, {_, decode}} = e
+            Enum.reduce(unquote(fields), state, fn fdef, acc ->
+              {field, {_, decode}} = fdef
               {offset, value, bin} = decode.(acc.offset, acc.bin)
 
               kw =
