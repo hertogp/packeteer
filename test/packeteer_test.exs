@@ -2,13 +2,13 @@ defmodule PacketeerTest do
   use ExUnit.Case
   doctest Packeteer
 
-  describe "simplex primitives" do
+  describe "fixed primitives" do
     test "uint" do
       code = """
       defmodule Uint do
         import Packeteer
 
-        simplex("",
+        fixed("",
         fields: [
           a: uint(8)
         ],

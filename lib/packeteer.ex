@@ -197,12 +197,11 @@ defmodule Packeteer do
   end
 
   defp fragments(fields) do
-    IO.inspect(fields)
     non_p = Enum.filter(fields, fn field -> f_type(field) != :p end)
 
     if non_p != [] do
       msg = Enum.map(non_p, fn {field, _gf} -> "'#{field}'" end) |> Enum.join(", ")
-      raise ArgumentError, "Packeteer.simplex/2 got non-primitive fields: #{msg}."
+      raise ArgumentError, "Packeteer.fixed/2 got non-primitive fields: #{msg}."
     end
 
     parts =
@@ -305,7 +304,7 @@ defmodule Packeteer do
     end
   end
 
-  # [[ SIMPLEX GENERATOR ]]
+  # [[ FIXED GENERATOR ]]
 
   defp before_encode(fun) do
     # return ast (or not) that calls the specified {before_encode: fun}
@@ -366,12 +365,12 @@ defmodule Packeteer do
     # take the ast and turn all public functions into private functions
     Macro.prewalk(ast, fn
       {:def, x, y} -> {:defp, x, y}
-      other -> other
+      other -> IO.inspect(other)
     end)
   end
 
-  defp do_simplex(name, opts) do
-    # builds the entire ast for the simplex macro to use
+  defp do_fixed(name, opts) do
+    # builds the entire ast for the fixed macro to use
     # add in some defaults
     opts =
       opts
@@ -452,7 +451,7 @@ defmodule Packeteer do
   name_decode(atom, non_neg_integer, binary) :: {non_neg_integer, Keyword.t, binary} | {:error, binary}
   ```
 
-  If some module M has only a single call to `simplex/2`, using `name = ""` will define:
+  If some module M has only a single call to `fixed/2`, using `name = ""` will define:
   `M.encode(kw)` and `M.decode(offset, bin)`.
 
   - `:fields` a mandatory list of [primitive](#primitives) field definitions
@@ -503,37 +502,36 @@ defmodule Packeteer do
 
   ## Example
 
+  A contrived, but simple, example would be to decode an unsigned integer whose
+  width is specified by a preceeding byte as a multiple of 4 bits.
+
       iex> mod = \"""
       ...> defmodule M do
       ...>  import Packeteer
-      ...>  simplex("lev_",
+      ...>  fixed("",
       ...>      fields: [
       ...>        len: uint(8),
       ...>        val: uint(:len * 4)
       ...>     ],
       ...>  docstr: false,
-      ...>  private: false,
-      ...>  after_decode: fn offset, kw, bin ->
-      ...>      if kw[:len] == 0 do
-      ...>        {offset, [], bin}
-      ...>      else
-      ...>        {offset, values, bin} = lev_decode(offset, bin)
-      ...>        values = [kw[:val] | values]
-      ...>        {offset, values,  bin}
-      ...>      end
-      ...>   end
       ...>  )
       ...> end
       ...> \"""
       iex> [{m, _}] = Code.compile_string(mod)
-      iex> m.lev_decode(0, <<2, 128, 4, 255, 255, 0>>)
-      {48, [128, 65535], <<2, 128, 4, 255, 255, 0>>}
+      iex> bin = m.encode(len: 4, val: 65535)
+      iex> bin
+      iex> <<4, 255, 255, "the rest">>
+      iex> m.decode(0, bin)
+      {24, [len: 4, val: 65535], <<4, 255, 255, "the rest">>}
+      iex> <<_::bits-size(24), rest::binary>> = bin
+      iex> rest
+      "the rest"
 
   """
-  defmacro simplex(name, opts) do
-    IO.inspect({name, opts[:private]}, label: :simplex_called)
-    qq = do_simplex(name, opts)
-    IO.puts(Macro.to_string(qq))
+  defmacro fixed(name, opts) do
+    qq = do_fixed(name, opts)
+    # make this an option: unless opts[:silent], do: IO.puts...
+    # IO.puts(Macro.to_string(qq))
     qq
   end
 
@@ -551,10 +549,10 @@ defmodule Packeteer do
   end
 
   # group fields by type in order to turn consecutive primitives into a single
-  # private expression using bit syntax (i.e. a single simplex encoder/decoder)
+  # private expression using bit syntax (i.e. a single fixed encoder/decoder)
   # returns {funcs, defs}
-  # - funcs, list of function calls, including new, private simplex en/decoder
-  # - defs, list of ast's that will define the private simplex en/decoders
+  # - funcs, list of function calls, including new, private fixed en/decoder
+  # - defs, list of ast's that will define the private fixed en/decoders
   defp consolidate([], _opts, funcs, defs, _n),
     do: {funcs, defs}
 
@@ -576,14 +574,14 @@ defmodule Packeteer do
   end
 
   defp consolidate([[{:p, _} | _] = h | tail], opts, funcs, defs, n) do
-    # turn list of primitives into single simplex encoder/decoder pair
+    # turn list of primitives into single fixed encoder/decoder pair
     plist = for {:p, p} <- h, do: p
     klist = for {k, _} <- plist, do: k
 
     # private func name xxx_part_<n>_encode/decode
-    # TODO: perhaps use simplex_n, n = :System.unique_integer([:positive])
+    # TODO: perhaps use fixed_n, n = :System.unique_integer([:positive])
     # because name might be ""
-    name = String.to_atom("#{opts[:name]}_simplex_#{n}_")
+    name = String.to_atom("#{opts[:name]}_fixed_#{n}_")
     encode = String.to_atom("#{name}encode")
     decode = String.to_atom("#{name}decode")
 
@@ -591,9 +589,8 @@ defmodule Packeteer do
     fields = Keyword.take(opts[:fields], klist)
     values = Keyword.take(opts[:defaults], klist)
 
-    # assemble args for simplex call later on
+    # assemble args for fixed call later on
     bbdef = {name, fields: fields, defaults: values, docstr: false, private: true}
-    # IO.inspect({n, bbdef}, label: :hmm)
 
     # can't use quote do &(encode/2) end, for some reason..
     call_enc =
@@ -608,9 +605,9 @@ defmodule Packeteer do
          {:/, [context: Elixir, imports: [{2, Kernel}]], [{decode, [], nil}, 2]}
        ]}
 
-    # add consolidated primitives as single simplex expr to list of funcs
-    # add simplex args to the list of definitions for later ast generation
-    funcs = funcs ++ [{:simplex, {call_enc, call_dec}}]
+    # add consolidated primitives as single fixed expr to list of funcs
+    # add fixed args to the list of definitions for later ast generation
+    funcs = funcs ++ [{:fixed, {call_enc, call_dec}}]
     defs = defs ++ [bbdef]
     consolidate(tail, opts, funcs, defs, n + 1)
   end
@@ -628,22 +625,19 @@ defmodule Packeteer do
     {fields, defs} =
       consolidate(fields, opts, [], [], 0)
 
-    IO.inspect(defs, label: :defs)
-
-    simplex_funcs =
+    fixed_funcs =
       for {name, args} <- defs,
-          do: do_simplex(name, args)
+          do: do_fixed(name, args)
 
     q =
       quote do
-        unquote_splicing(simplex_funcs)
+        unquote_splicing(fixed_funcs)
 
         def unquote(encode)(kw \\ []) do
           kw = Keyword.merge(unquote(values), kw)
 
           encoded_kw =
             for {field, {encode, _}} <- unquote(fields) do
-              IO.inspect({field, kw}, label: :kw)
               {field, encode.(kw[field] || [])}
             end
 
@@ -659,7 +653,7 @@ defmodule Packeteer do
               {offset, value, bin} = decode.(acc.offset, acc.bin)
 
               kw =
-                if field == :simplex,
+                if field == :fixed,
                   do: acc.kw ++ value,
                   else: acc.kw ++ [{field, value}]
 
