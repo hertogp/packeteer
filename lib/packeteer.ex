@@ -365,7 +365,7 @@ defmodule Packeteer do
     # take the ast and turn all public functions into private functions
     Macro.prewalk(ast, fn
       {:def, x, y} -> {:defp, x, y}
-      other -> IO.inspect(other)
+      other -> other
     end)
   end
 
@@ -435,8 +435,8 @@ defmodule Packeteer do
   end
 
   @doc """
-  Defines `encode`/`decode` functions for given `name` and `opts`, which
-  must include a list of [_primitive_](#primitives) fields.
+  Defines encode/decode functions for given `name` and `opts`, which must
+  include a list of [_primitive_](#primitives) fields.
 
   The following encode/decode functions will be defined in the calling module:
   - `\#{name}encode/1` and `\#{name}decode/2`, or
@@ -446,10 +446,14 @@ defmodule Packeteer do
   ```
   name_encode(Keyword.t) :: binary | {:error, binary}
   name_decode(non_neg_integer, binary) :: {non_neg_integer, Keyword.t, binary} | {:error, binary}
-  # or
-  name_encode(atom, Keyword.t) :: binary | {:error, binary}
-  name_decode(atom, non_neg_integer, binary) :: {non_neg_integer, Keyword.t, binary} | {:error, binary}
+
+  # or when using the option `pattern: literal`:
+  name_encode(literal, Keyword.t) :: binary | {:error, binary}
+  name_decode(literal, non_neg_integer, binary) :: {non_neg_integer, Keyword.t, binary} | {:error, binary}
   ```
+
+  Where the `literal` is an expression that is its own ast, see
+  [Literals](https://hexdocs.pm/elixir/typespecs.html#literals).
 
   If some module M has only a single call to `fixed/2`, using `name = ""` will define:
   `M.encode(kw)` and `M.decode(offset, bin)`.
@@ -503,7 +507,8 @@ defmodule Packeteer do
   ## Example
 
   A contrived, but simple, example would be to decode an unsigned integer whose
-  width is specified by a preceeding byte as a multiple of 4 bits.
+  width is specified by a preceeding byte as a multiple of 4 bits, followed by
+  a binary of 5 bytes.
 
       iex> mod = \"""
       ...> defmodule M do
@@ -511,20 +516,24 @@ defmodule Packeteer do
       ...>  fixed("",
       ...>      fields: [
       ...>        len: uint(8),
-      ...>        val: uint(:len * 4)
+      ...>        val: uint(:len * 4),
+      ...>        str: binary(5)
       ...>     ],
-      ...>  docstr: false
+      ...>     defaults: [
+      ...>       str: "stuff"
+      ...>     ],
+      ...>     docstr: false
       ...>  )
       ...> end
       ...> \"""
       iex> [{m, _}] = Code.compile_string(mod)
-      iex> bin = m.encode(len: 4, val: 65535) <> "the rest"
-      <<4, 255, 255, "the rest">>
+      iex> bin = m.encode(len: 4, val: 65535) <> "more stuff"
+      <<4, 255, 255, "stuff", "more stuff">>
       iex> m.decode(0, bin)
-      {24, [len: 4, val: 65535], <<4, 255, 255, "the rest">>}
-      iex> <<_::bits-size(24), rest::binary>> = bin
-      iex> rest
-      "the rest"
+      {64, [len: 4, val: 65535, str: "stuff"], <<4, 255, 255, "stuff", "more stuff">>}
+      iex> <<_::bits-size(64), more::binary>> = bin
+      iex> more
+      "more stuff"
 
   """
   defmacro fixed(name, opts) do
@@ -534,17 +543,13 @@ defmodule Packeteer do
     qq
   end
 
-  # [[ COMPLEX GENERATOR ]]
+  # [[ FLUID GENERATOR ]]
 
   defp f_type({_fieldname, v}) do
     # check type of value for a given field
     # - :p means it is a primitive
     # - :f means a user supplied function
     if elem(v, 0) in @primitives, do: :p, else: :f
-    # case elem(v, 0) do
-    #   f when f in @primitives -> :p
-    #   _ -> :f
-    # end
   end
 
   # group fields by type in order to turn consecutive primitives into a single
@@ -552,27 +557,27 @@ defmodule Packeteer do
   # returns {funcs, defs}
   # - funcs, list of function calls, including new, private fixed en/decoder
   # - defs, list of ast's that will define the private fixed en/decoders
-  defp consolidate([], _opts, funcs, defs, _n),
-    do: {funcs, defs}
-
-  defp consolidate(fields, opts, [], [], 0) do
-    # this is where consolidation starts, only used by `do_complex`
+  defp consolidate(fields, opts) do
+    # this is where consolidation starts, only used by `do_fluid`
     annotated_fields =
       for field <- fields do
         {f_type(field), field}
       end
       |> Enum.chunk_by(fn t -> elem(t, 0) end)
 
-    consolidate(annotated_fields, opts, [], [], 1)
+    consolidate(annotated_fields, opts, [], [])
   end
 
-  defp consolidate([[{:f, _} | _] = h | tail], opts, funcs, defs, n) do
-    # plain func calls, so move on
+  defp consolidate([], _opts, funcs, defs),
+    do: {funcs, defs}
+
+  defp consolidate([[{:f, _} | _] = h | tail], opts, funcs, defs) do
+    # plain function calls, so move on
     flist = for {:f, f} <- h, do: f
-    consolidate(tail, opts, funcs ++ flist, defs, n + 1)
+    consolidate(tail, opts, funcs ++ flist, defs)
   end
 
-  defp consolidate([[{:p, _} | _] = h | tail], opts, funcs, defs, n) do
+  defp consolidate([[{:p, _} | _] = h | tail], opts, funcs, defs) do
     # turn list of primitives into single fixed encoder/decoder pair
     plist = for {:p, p} <- h, do: p
     klist = for {k, _} <- plist, do: k
@@ -580,7 +585,8 @@ defmodule Packeteer do
     # private func name xxx_part_<n>_encode/decode
     # TODO: perhaps use fixed_n, n = :System.unique_integer([:positive])
     # because name might be ""
-    name = String.to_atom("#{opts[:name]}_fixed_#{n}_")
+    n = System.unique_integer([:positive])
+    name = String.to_atom("fixed_#{n}_")
     encode = String.to_atom("#{name}encode")
     decode = String.to_atom("#{name}decode")
 
@@ -608,11 +614,11 @@ defmodule Packeteer do
     # add fixed args to the list of definitions for later ast generation
     funcs = funcs ++ [{:fixed, {call_enc, call_dec}}]
     defs = defs ++ [bbdef]
-    consolidate(tail, opts, funcs, defs, n + 1)
+    consolidate(tail, opts, funcs, defs)
   end
 
-  defp do_complex(name, opts) do
-    # return the ast for complex macro to use
+  defp do_fluid(name, opts) do
+    # return the ast for fluid macro to use
     # opts[:name] is for possible later use when consolidating primitives
     opts = Keyword.put_new(opts, :name, name)
     encode = String.to_atom("#{opts[:name]}encode")
@@ -621,8 +627,7 @@ defmodule Packeteer do
     values = opts[:defaults] || []
     join = opts[:join]
 
-    {fields, defs} =
-      consolidate(fields, opts, [], [], 0)
+    {fields, defs} = consolidate(fields, opts)
 
     fixed_funcs =
       for {name, args} <- defs,
@@ -671,13 +676,15 @@ defmodule Packeteer do
   end
 
   @doc """
-  A macro that creates \#{name}encode and \#{name}decode functions for given
-  name, _complex_ `fields`-definition and some extra options.
+  Defines encode/decode functions for given `name` and `opts`, which must include
+  a list of field definitions.
 
 
   """
-  defmacro complex(name, opts) do
-    qq = do_complex(name, opts)
-    if opts[:private], do: do_defp(qq), else: qq
+  defmacro fluid(name, opts) do
+    qq = do_fluid(name, opts)
+    qq = if opts[:private], do: do_defp(qq), else: qq
+    IO.puts(Macro.to_string(qq))
+    qq
   end
 end
