@@ -197,6 +197,14 @@ defmodule Packeteer do
   end
 
   defp fragments(fields) do
+    IO.inspect(fields)
+    non_p = Enum.filter(fields, fn field -> f_type(field) != :p end)
+
+    if non_p != [] do
+      msg = Enum.map(non_p, fn {field, _gf} -> "'#{field}'" end) |> Enum.join(", ")
+      raise ArgumentError, "Packeteer.simplex/2 got non-primitive fields: #{msg}."
+    end
+
     parts =
       for {n, q} <- fields do
         f = apply(__MODULE__, elem(q, 0), elem(q, 2))
@@ -237,9 +245,9 @@ defmodule Packeteer do
     if opts[:private] or not opts[:docstr] do
       false
     else
-      # don't want the hidden field to show up
-      fields = Keyword.delete(opts[:fields], :skip__)
-      values = Keyword.delete(opts[:values], :skip__)
+      # don't want the hidden field to show up (if present)
+      fields = Keyword.delete(opts[:fields] || [], :skip__)
+      values = Keyword.delete(opts[:values] || [], :skip__)
       codec = fragments(fields)
 
       """
@@ -277,7 +285,7 @@ defmodule Packeteer do
       false
     else
       # don't want the hidden field to show up
-      fields = Keyword.delete(opts[:fields], :skip__)
+      fields = Keyword.delete(opts[:fields] || [], :skip__)
       codec = fragments(fields)
 
       """
@@ -363,11 +371,16 @@ defmodule Packeteer do
   end
 
   defp do_simplex(name, opts) do
-    # build the entire ast for the simplex macro to use
-    # [ ] use private to decide whether to generate docstrings or not instead of docstr
-    opts = Keyword.put_new(opts, :docstr, true)
+    # builds the entire ast for the simplex macro to use
+    # add in some defaults
+    opts =
+      opts
+      |> Keyword.put_new(:docstr, true)
+      |> Keyword.put_new(:private, false)
+      |> Keyword.put_new(:defaults, [])
+
     fields = opts[:fields]
-    values = opts[:defaults] || []
+    values = opts[:defaults]
     all? = all?(fields)
     maybe_skip = maybe_skip(all?)
     fields = if all?, do: fields, else: fields ++ [{:skip__, {:bits, [], []}}]
@@ -409,7 +422,7 @@ defmodule Packeteer do
             unquote(codec) = rest
             kw = Enum.zip(unquote(keys), unquote(vars))
             skipped = kw[:skip__] || <<>>
-            offset = offset + bit_size(bin) - bit_size(skipped)
+            offset = bit_size(bin) - bit_size(skipped)
             kw = Keyword.delete(kw, :skip__)
             unquote(after_decode)
             {offset, kw, bin}
@@ -482,16 +495,41 @@ defmodule Packeteer do
   `true`, this overrides the `:docstr` option without warning.
 
   - `:pattern`, a literal expression that becomes the, additional, first argument of the
-  encode and decode functions.  Useful when creating multiple encode/decode
-  functions with the same name.  Note that unless manually adding a catch all
-  version of the encode and decode function, `FunctionClauseError` might occur.
-  If the generated encode/decode functions are private, the manual encode/decode
+  encode and decode functions.  Allows for creating multiple encode/decode
+  functions with the same name.  Additional, manual catch-all encode/decode
+  functions might be required to handle any `FunctionClauseError`.  Note that if
+  the generated encode/decode functions are private, the manual encode/decode
   function names need to be different.
 
+  ## Example
+
+      iex> mod = \"""
+      ...> defmodule M do
+      ...>  import Packeteer
+      ...>  simplex("lev_",
+      ...>      fields: [
+      ...>        len: uint(8),
+      ...>        val: uint(:len * 4)
+      ...>     ],
+      ...>  docstr: false,
+      ...>  private: false,
+      ...>  after_decode: fn offset, kw, bin ->
+      ...>      if kw[:len] == 0 do
+      ...>        {offset, [], bin}
+      ...>      else
+      ...>        {offset, values, bin} = lev_decode(offset, bin)
+      ...>        values = [kw[:val] | values]
+      ...>        {offset, values,  bin}
+      ...>      end
+      ...>   end
+      ...>  )
+      ...> end
+      ...> \"""
+      iex> [{m, _}] = Code.compile_string(mod)
+      iex> m.lev_decode(0, <<2, 128, 4, 255, 255, 0>>)
+      {48, [128, 65535], <<2, 128, 4, 255, 255, 0>>}
 
   """
-  # See: https://elixirforum.com/t/how-do-i-write-a-macro-that-dynamically-defines-a-public-or-private-function/14351
-  # - howto dynamically generate def or defp functions
   defmacro simplex(name, opts) do
     IO.inspect({name, opts[:private]}, label: :simplex_called)
     qq = do_simplex(name, opts)
