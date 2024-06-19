@@ -481,10 +481,12 @@ defmodule Packeteer do
   encode/decode functions are defined as private or public functions. If
   `true`, this overrides the `:docstr` option without warning.
 
-  - `:pattern`, a literal that becomes the, additional, first argument of the
+  - `:pattern`, a literal expression that becomes the, additional, first argument of the
   encode and decode functions.  Useful when creating multiple encode/decode
-  functions with the same name. Note that unless manually adding a catch all
+  functions with the same name.  Note that unless manually adding a catch all
   version of the encode and decode function, `FunctionClauseError` might occur.
+  If the generated encode/decode functions are private, the manual encode/decode
+  function names need to be different.
 
 
   """
