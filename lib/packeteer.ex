@@ -652,7 +652,7 @@ defmodule Packeteer do
     encode_fun = String.to_atom("#{name}encode")
     encode_args = maybe_pattern(:encode, opts)
     encode_doc = docstring(:encode, opts)
-    # before_encode = before_encode(opts[:before_encode])
+    before_encode = before_encode(opts[:before_encode])
 
     decode_fun = String.to_atom("#{name}decode")
     decode_args = maybe_pattern(:decode, opts)
@@ -674,6 +674,7 @@ defmodule Packeteer do
 
         @doc unquote(encode_doc)
         def unquote(encode_fun)(unquote_splicing(encode_args)) do
+          unquote(before_encode)
           kw = Keyword.merge(unquote(values), kw)
 
           encoded_kw =
