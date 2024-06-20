@@ -452,11 +452,10 @@ defmodule Packeteer do
   name_decode(literal, non_neg_integer, binary) :: {non_neg_integer, Keyword.t, binary} | {:error, binary}
   ```
 
-  Where the `literal` is an expression that is its own ast, see
-  [Literals](https://hexdocs.pm/elixir/typespecs.html#literals).
-
-  If some module M has only a single call to `fixed/2`, using `name = ""` will define:
-  `M.encode(kw)` and `M.decode(offset, bin)`.
+  Where the [literal](https://hexdocs.pm/elixir/typespecs.html#literals). is an
+  expression that is its own ast.  If some module M has only a single call
+  to `fixed/2`, using `name = ""` will define: `M.encode(kw)` and
+  `M.decode(offset, bin)`.
 
   - `:fields` a mandatory list of [primitive](#primitives) field definitions
   used to construct the bitstring match expression for both the encode and
@@ -640,14 +639,17 @@ defmodule Packeteer do
         def unquote(encode)(kw \\ []) do
           kw = Keyword.merge(unquote(values), kw)
 
-          for {field, {encode, _}} <- unquote(fields) do
-            # {field, encode.(kw[field] || [])}
-            if field == :fixed,
-              do: {field, encode.(kw)},
-              else: {field, encode.(field, kw[field])}
-          end
-          |> Keyword.values()
-          |> Enum.join()
+          encoded_kw =
+            for {field, {encode, _}} <- unquote(fields) do
+              # {field, encode.(kw[field] || [])}
+              if field == :fixed,
+                do: {field, encode.(kw)},
+                else: {field, encode.(field, kw[field])}
+            end
+
+          if unquote(opts[:join]),
+            do: Keyword.values(encoded_kw) |> Enum.join(),
+            else: encoded_kw
         end
 
         def unquote(decode)(offset, bin) do
@@ -656,17 +658,16 @@ defmodule Packeteer do
           map =
             Enum.reduce(unquote(fields), state, fn fdef, acc ->
               {field, {_, decode}} = fdef
-              {offset, value, bin} = decode.(acc.offset, acc.bin)
 
-              kw =
+              {offset, kw, bin} =
                 if field == :fixed,
-                  do: acc.kw ++ value,
-                  else: acc.kw ++ [{field, value}]
+                  do: decode.(acc.offset, acc.bin),
+                  else: decode.(field, acc.offset, acc.bin)
 
               acc
               |> Map.put(:offset, offset)
               |> Map.put(:bin, bin)
-              |> Map.put(:kw, kw)
+              |> Map.put(:kw, acc.kw ++ kw)
             end)
 
           {map.offset, map.kw, map.bin}
