@@ -743,6 +743,28 @@ defmodule Packeteer do
   # - offset is a non_negative_integer
   ```
 
+  By including the field name in the signature, the user supplied encode/decode
+  function might take different actions and/or be a series of public or private
+  functions that do the work that a straight bitstring expression can't.
+
+  The `name` and `opts` work the same as in `fixed/2`: the `name` is used as prefix
+  in the fluid generated encode/decode functions and `opts` must have the mandatory
+  `fields` entry listing the field definitions.  All the extra options of `fixed/2`
+  are also supported by `fluid/2`.
+
+  One extra additional option is supported by `fluid/2`:
+
+  - `:join`, either `true` (default) or `false`, speficies whether the binary
+  parts are joined together by the fluid encoder or not.  This might help
+  troubleshooting an encoder that seems to misbehave.  Ofcourse, you can also
+  set `:silent` to false to have the generated encode/decode funtions printed
+  to stdout during compilation.
+
+
+
+
+
+
   """
   defmacro fluid(name, opts),
     do: fluid_ast(name, opts)
