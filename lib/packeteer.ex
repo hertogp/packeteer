@@ -510,7 +510,7 @@ defmodule Packeteer do
   decode functions. Hence, the order of field definitions in this list is
   significant.
 
-  Possible extra options include:
+  Other options include:
 
   - `:defaults`, a keyword list specifying default values for one or more
   fields, used by the encode function when called with fields missing. Note
