@@ -255,10 +255,15 @@ defmodule Packeteer do
       # don't want the hidden field to show up (if present)
       fields = Keyword.delete(opts[:fields] || [], :skip__)
       values = Keyword.delete(opts[:values] || [], :skip__)
-      codec = fragments(fields)
+      fixed? = Enum.all?(fields, fn f -> f_type(f) == :p end)
+
+      codec =
+        if fixed?,
+          do: fragments(fields),
+          else: nil
 
       """
-      Encodes #{length(fields)} _named_ fields from given `kw` keyword list to a binary
+      Encodes #{length(fields)} named fields from given `kw` keyword list to a binary
       as per field definitions below.
 
       Fields are encoded in the order listed in the field definition.  All _named_ fields
@@ -269,12 +274,19 @@ defmodule Packeteer do
       #{pretty_fields(fields)}
       ```
 
-      Bitstring expression:
-      ```
-      #{Macro.to_string(codec)}
-      ```
+      #{if codec do
+        """
+        Bitstring expression:
+        ```
+        #{Macro.to_string(codec)}
+        ```
+        """
+      else
+        "The encoder is produced by `fluid2`."
+      end}
+
       #{if values == [] do
-        "The encoder has no default values defined."
+        "No default values defined."
       else
         """
         Default values:
@@ -293,10 +305,15 @@ defmodule Packeteer do
     else
       # don't want the hidden field to show up
       fields = Keyword.delete(opts[:fields] || [], :skip__)
-      codec = fragments(fields)
+      fixed? = Enum.all?(fields, fn f -> f_type(f) == :p end)
+
+      codec =
+        if fixed?,
+          do: fragments(fields),
+          else: nil
 
       """
-      Decodes #{length(fields)} _named_ fields from given `bin` binary, starting at `offset`,
+      Decodes #{length(fields)} named fields from given `bin` binary, starting at `offset`,
       returns `{new_offset, Keyword.t, binary}`.
 
       Field definitions:
@@ -304,10 +321,16 @@ defmodule Packeteer do
       #{pretty_fields(fields)}
       ```
 
-      Bitstring expression:
-      ```
-      #{Macro.to_string(codec)}
-      ```
+      #{if codec do
+        """
+        Bitstring expression:
+        ```
+        #{Macro.to_string(codec)}
+        ```
+        """
+      else
+        "The encoder is produced by `fluid2`."
+      end}
       """
     end
   end
@@ -628,12 +651,12 @@ defmodule Packeteer do
 
     encode_fun = String.to_atom("#{name}encode")
     encode_args = maybe_pattern(:encode, opts)
-    # encode_doc = docstring(:encode, opts)
+    encode_doc = docstring(:encode, opts)
     # before_encode = before_encode(opts[:before_encode])
 
     decode_fun = String.to_atom("#{name}decode")
     decode_args = maybe_pattern(:decode, opts)
-    # decode_doc = docstring(:decode, opts)
+    decode_doc = docstring(:decode, opts)
     # after_decode = after_decode(opts[:after_decode])
 
     {fields, defs} = consolidate(fields, opts)
@@ -649,6 +672,7 @@ defmodule Packeteer do
       quote do
         unquote_splicing(fixed_funcs)
 
+        @doc unquote(encode_doc)
         def unquote(encode_fun)(unquote_splicing(encode_args)) do
           kw = Keyword.merge(unquote(values), kw)
 
@@ -664,6 +688,7 @@ defmodule Packeteer do
             else: encoded_kw
         end
 
+        @doc unquote(decode_doc)
         def unquote(decode_fun)(unquote_splicing(decode_args)) do
           state = %{offset: offset, bin: bin, kw: []}
 
