@@ -820,7 +820,7 @@ defmodule Packeteer do
       ...> defmodule RR do
       ...>   import Packeteer
       ...>
-      ...>   fluid("",
+      ...>   fluid("p_",
       ...>     pattern: :soa,
       ...>     fields: [
       ...>       mname: {&name_enc/2, &name_dec/3},
@@ -876,8 +876,8 @@ defmodule Packeteer do
       ...> end
       ...> \"""
       iex> [{m, _}] = Code.compile_string(mod)
-      iex> bin = m.encode(:soa, [])  #=> <<2, 110, 115, 5, 105, 99, 97, ...>>
-      iex> {offset, kw, _bin} = m.decode(:soa, 0, bin)
+      iex> bin = m.p_encode(:soa, [])  #=> <<2, 110, 115, 5, 105, 99, 97, ...>>
+      iex> {offset, kw, _bin} = m.p_decode(:soa, 0, bin)
       iex> offset
       424
       iex> kw
@@ -891,8 +891,9 @@ defmodule Packeteer do
         minimum: 3600
       ]
 
-  The domain name `name_enc/2` and `name_dec/3` would be helper functions used in a
-  lot of RR encode/decode functions.
+  Normally, you would set `:private` to `true` and provide only two public functions
+  `RR.encode/1` and `RR.decode/2` that would be called by the parser of the RR record
+  as a whole.
 
   """
   defmacro fluid(name, opts),
