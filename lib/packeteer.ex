@@ -177,8 +177,8 @@ defmodule Packeteer do
     opts
     |> Keyword.put_new(:docstr, true)
     |> Keyword.put_new(:private, false)
-    |> Keyword.put_new(:defaults, [])
     |> Keyword.put_new(:silent, true)
+    |> Keyword.put_new(:defaults, [])
   end
 
   # [[ FRAGMENTS ]]
@@ -388,14 +388,14 @@ defmodule Packeteer do
     keys = Enum.map(fields, fn {k, _} -> k end)
     vars = Enum.map(keys, fn k -> var(k) end)
 
-    encode_doc = docstring(:encode, opts)
     encode_fun = String.to_atom("#{name}encode")
     encode_args = maybe_pattern(:encode, opts)
+    encode_doc = docstring(:encode, opts)
     before_encode = before_encode(opts[:before_encode])
 
-    decode_doc = docstring(:decode, opts)
     decode_fun = String.to_atom("#{name}decode")
     decode_args = maybe_pattern(:decode, opts)
+    decode_doc = docstring(:decode, opts)
     after_decode = after_decode(opts[:after_decode])
 
     codec = fragments(fields)
@@ -623,12 +623,23 @@ defmodule Packeteer do
   defp fluid_ast(name, opts) do
     # returns the ast for the fluid macro to use
     opts = generic_defaults(opts)
-    encode = String.to_atom("#{name}encode")
-    decode = String.to_atom("#{name}decode")
     fields = opts[:fields]
-    values = opts[:defaults] || []
+    values = opts[:defaults]
+
+    encode_fun = String.to_atom("#{name}encode")
+    encode_args = maybe_pattern(:encode, opts)
+    # encode_doc = docstring(:encode, opts)
+    # before_encode = before_encode(opts[:before_encode])
+
+    decode_fun = String.to_atom("#{name}decode")
+    decode_args = maybe_pattern(:decode, opts)
+    # decode_doc = docstring(:decode, opts)
+    # after_decode = after_decode(opts[:after_decode])
 
     {fields, defs} = consolidate(fields, opts)
+
+    for field <- fields,
+        do: IO.inspect(field, label: :all?)
 
     fixed_funcs =
       for {name, args} <- defs,
@@ -638,7 +649,7 @@ defmodule Packeteer do
       quote do
         unquote_splicing(fixed_funcs)
 
-        def unquote(encode)(kw \\ []) do
+        def unquote(encode_fun)(unquote_splicing(encode_args)) do
           kw = Keyword.merge(unquote(values), kw)
 
           encoded_kw =
@@ -653,7 +664,7 @@ defmodule Packeteer do
             else: encoded_kw
         end
 
-        def unquote(decode)(offset, bin) do
+        def unquote(decode_fun)(unquote_splicing(decode_args)) do
           state = %{offset: offset, bin: bin, kw: []}
 
           map =
