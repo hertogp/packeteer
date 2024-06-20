@@ -511,7 +511,7 @@ defmodule Packeteer do
   - `:after_decode`, either an anonymous function or a function reference whose
   signature is
   ```
-  fun(non_neg_integer, Keyword.t, binary) :: (non_neg_integer, Keyword.t, binary)
+  fun(non_neg_integer, Keyword.t, binary) :: {non_neg_integer, Keyword.t, binary}
   ```
   If specified, this function will be called with the results of decoding and its
   return values will be used as the final result of the decoder function.
@@ -657,7 +657,7 @@ defmodule Packeteer do
     decode_fun = String.to_atom("#{name}decode")
     decode_args = maybe_pattern(:decode, opts)
     decode_doc = docstring(:decode, opts)
-    # after_decode = after_decode(opts[:after_decode])
+    after_decode = after_decode(opts[:after_decode])
 
     {fields, defs} = consolidate(fields, opts)
 
@@ -708,7 +708,9 @@ defmodule Packeteer do
               |> Map.put(:kw, acc.kw ++ kw)
             end)
 
-          {map.offset, map.kw, map.bin}
+          {offset, kw, bin} = {map.offset, map.kw, map.bin}
+          unquote(after_decode)
+          {offset, kw, bin}
         end
       end
 
