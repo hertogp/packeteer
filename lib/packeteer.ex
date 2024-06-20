@@ -127,7 +127,7 @@ defmodule Packeteer do
   codepoint at a time.
 
   The default for `endian` is `:big`, pass in either `:little` or `native`
-  as appropiate.
+  as appropriate.
 
   """
   @doc section: :fragment
@@ -142,7 +142,7 @@ defmodule Packeteer do
   can encode or decode only 1 utf codepoint at a time.
 
   The default for `endian` is `:big`, pass in either `:little` or `native`
-  as appropiate.
+  as appropriate.
 
   """
   @doc section: :fragment
@@ -158,7 +158,7 @@ defmodule Packeteer do
   used at the moment.
 
   The default for `endian` is `:big`, pass in either `:little` or `native`
-  as appropiate.
+  as appropriate.
 
   """
   @doc section: :fragment
@@ -459,7 +459,7 @@ defmodule Packeteer do
 
   - `:fields` a mandatory list of [primitive](#primitives) field definitions
   used to construct the bitstring match expression for both the encode and
-  decode functions. Hence, the order of field definitons in this list is
+  decode functions. Hence, the order of field definitions in this list is
   significant.
 
   Possible extra options include:
@@ -486,13 +486,13 @@ defmodule Packeteer do
   If specified, this function will be called with the results of decoding and its
   return values will be used as the final result of the decoder function.
 
-  - `:docstr`, either `true` (the default) or `false`, specify whether
+  - `:docstr`, either `true` (the default) or `false`, specifies whether
   or not docstrings are to be generated for the encode/decode functions. By
   default the encode/decode functions are generated as public functions,
   setting `docstr` to `false` allows for eliminating them from documentation
   while still be available as public functions in your en/decoder module.
 
-  - `:private`, either `true` or `false` (default), specify whether the
+  - `:private`, either `true` or `false` (default), specifies whether the
   encode/decode functions are defined as private or public functions. If
   `true`, this overrides the `:docstr` option without warning.
 
@@ -501,12 +501,12 @@ defmodule Packeteer do
   functions with the same name.  Additional, manual catch-all encode/decode
   functions might be required to handle any `FunctionClauseError`.  Note that if
   the generated encode/decode functions are private, the manual encode/decode
-  function names need to be different.
+  function names will need to be different.
 
   ## Example
 
   A contrived, but simple, example would be to decode an unsigned integer whose
-  width is specified by a preceeding byte as a multiple of 4 bits, followed by
+  width is specified by a preceding byte as a multiple of 4 bits, followed by
   a binary of 5 bytes.
 
       iex> mod = \"""
