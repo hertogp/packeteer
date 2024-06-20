@@ -790,7 +790,7 @@ defmodule Packeteer do
 
   One additional option is supported by `fluid/2`:
 
-  - `:join`, either `true` (default) or `false`, speficies whether the binary
+  - `:join`, either `true` (default) or `false`, specifies whether the binary
   parts are joined together by the fluid encoder or not.  If:
     - `true`, the binary parts are joined and returned by the fluid encoder
     - `false`, the list of fieldnames and their binary representation is returned instead.
@@ -807,10 +807,13 @@ defmodule Packeteer do
   > given binary, if using bitstring expression, via `<<..., _::bits>>`,
   > otherwise their decoding will fail.  If the last field definition is a
   > primitive, then `fixed/2` will add the hidden `:skip__` field to ensure a
-  > match will match the remainder
+  > match will match the remainder.
 
   ## Example
 
+  Suppose domain name compression was a thing and you're defining a module `RR` that
+  decodes the rdata section of different resource records, starting with a SOA RR.
+  So, with two helper encoder/decoder's, you could do something like this:
 
       iex> mod = \"""
       ...> defmodule RR do
@@ -886,6 +889,9 @@ defmodule Packeteer do
         expire: 1209600,
         minimum: 3600
       ]
+
+  The domain name `name_enc/2` and `name_dec/3` would be helper functions used in a
+  lot of RR encode/decode functions.
 
   """
   defmacro fluid(name, opts),
