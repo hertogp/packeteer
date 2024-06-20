@@ -497,8 +497,10 @@ defmodule Packeteer do
   > #### Info {: .info}
   > If the last field in the list of definitions does not match the remaining
   > bits of any given binary, a hidden field `:skip__` is added to the
-  > expression to ensure matching won't fail.  Upon encoding it encodes
-  > an empty string so it won't add any bits to the encoded binary.
+  > expression to ensure matching won't fail.  It is removed from the resulting
+  > `kw` prior to being handed to the `:after_decoding` function (if any).
+  > Upon encoding it encodes an empty string so it won't add any bits to
+  > the encoded binary.  Hidden also means it won't show up in the docstrings.
 
 
   - `:fields` a mandatory list of [primitive](#primitives) field definitions
@@ -528,7 +530,8 @@ defmodule Packeteer do
   fun(offset, Keyword.t, binary) :: {offset, Keyword.t, binary}
   ```
   If specified, this function will be called with the results of decoding and its
-  return values will be used as the final result of the decoder function.
+  return value(s) are returned as-is. Although the assumption is it will adhere
+  to `{offset, Keyword.t, binary}` that need not be the case.
 
   - `:docstr`, either `true` (the default) or `false`, specifies whether
   or not docstrings are to be generated for the encode/decode functions. By
