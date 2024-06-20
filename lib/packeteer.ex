@@ -452,7 +452,7 @@ defmodule Packeteer do
   name_decode(literal, non_neg_integer, binary) :: {non_neg_integer, Keyword.t, binary} | {:error, binary}
   ```
 
-  Where the [literal](https://hexdocs.pm/elixir/typespecs.html#literals). is an
+  Where the [literal](https://hexdocs.pm/elixir/typespecs.html#literals) is an
   expression that is its own ast.  If some module M has only a single call
   to `fixed/2`, using `name = ""` will define: `M.encode(kw)` and
   `M.decode(offset, bin)`.
