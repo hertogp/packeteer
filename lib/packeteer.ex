@@ -350,7 +350,11 @@ defmodule Packeteer do
     # return ast (or not) that calls the specified {after_decode: fun}
     if fun do
       quote do
-        {offset, kw, bin} = unquote(fun).(offset, kw, bin)
+        unquote(fun).(offset, kw, bin)
+      end
+    else
+      quote do
+        {offset, kw, bin}
       end
     end
   end
@@ -449,7 +453,6 @@ defmodule Packeteer do
             offset = bit_size(bin) - bit_size(skipped)
             kw = Keyword.delete(kw, :skip__)
             unquote(after_decode)
-            {offset, kw, bin}
           rescue
             error -> {:error, Exception.message(error)}
           end
@@ -710,7 +713,6 @@ defmodule Packeteer do
 
           {offset, kw, bin} = {map.offset, map.kw, map.bin}
           unquote(after_decode)
-          {offset, kw, bin}
         end
       end
 
