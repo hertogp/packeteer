@@ -728,6 +728,21 @@ defmodule Packeteer do
   Defines encode/decode functions for given `name` and `opts`, which must include
   a list of field definitions.
 
+  Sometimes binary protocols require more logic than what can be achieved
+  through mere bitstring match expressions.  `fluid/2` allows for non-primitive
+  field definitions consisting of a field whose value is a two-tuple containing
+  the function references to a user supplied encode resp. decode function.
+  Their signatures are:
+
+  ```
+  encoder(atom, any) :: binary
+  decoder(atom, offset, binary) :: {offset, [{atom, any}], binary}
+
+  # where:
+  # - atom is the name of the field being encoded/decoded
+  # - offset is a non_negative_integer
+  ```
+
   """
   defmacro fluid(name, opts),
     do: fluid_ast(name, opts)
