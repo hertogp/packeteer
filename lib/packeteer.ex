@@ -369,14 +369,15 @@ defmodule Packeteer do
     end)
   end
 
-  defp do_fixed(name, opts) do
-    # builds the entire ast for the fixed macro to use
-    # add in some defaults
+  defp fixed_ast(name, opts) do
+    # returns the ast for the fixed macro to use
+    # ensure default values for options are present
     opts =
       opts
       |> Keyword.put_new(:docstr, true)
       |> Keyword.put_new(:private, false)
       |> Keyword.put_new(:defaults, [])
+      |> Keyword.put_new(:silent, true)
 
     fields = opts[:fields]
     values = opts[:defaults]
@@ -399,7 +400,7 @@ defmodule Packeteer do
     codec = fragments(fields)
     binds = bindings(fields)
 
-    qq =
+    ast =
       quote do
         @doc unquote(encode_doc)
         def unquote(encode_fun)(unquote_splicing(encode_args)) when is_list(kw) do
@@ -431,7 +432,12 @@ defmodule Packeteer do
         end
       end
 
-    if opts[:private], do: do_defp(qq), else: qq
+    ast = if opts[:private], do: do_defp(ast), else: ast
+
+    unless opts[:silent],
+      do: IO.puts(Macro.to_string(ast))
+
+    ast
   end
 
   @doc """
@@ -503,6 +509,9 @@ defmodule Packeteer do
   the generated encode/decode functions are private, the manual encode/decode
   function names will need to be different.
 
+  - `:silent`, either `true` (default) or `false`, specifies whether the generated ast's
+  for the encode/decode functions are printed to stdout during compilation.
+
   ## Example
 
   A contrived, but simple, example would be to decode an unsigned integer whose
@@ -535,12 +544,8 @@ defmodule Packeteer do
       "more stuff"
 
   """
-  defmacro fixed(name, opts) do
-    qq = do_fixed(name, opts)
-    # make this an option: unless opts[:silent], do: IO.puts...
-    # IO.puts(Macro.to_string(qq))
-    qq
-  end
+  defmacro fixed(name, opts),
+    do: fixed_ast(name, opts)
 
   # [[ FLUID GENERATOR ]]
 
@@ -557,7 +562,7 @@ defmodule Packeteer do
   # - funcs, list of function calls, including new, private fixed en/decoder
   # - defs, list of ast's that will define the private fixed en/decoders
   defp consolidate(fields, opts) do
-    # this is where consolidation starts, only used by `do_fluid`
+    # this is where consolidation starts, only used by `fluid_ast`
     annotated_fields =
       for field <- fields do
         {f_type(field), field}
@@ -581,9 +586,7 @@ defmodule Packeteer do
     plist = for {:p, p} <- h, do: p
     klist = for {k, _} <- plist, do: k
 
-    # private func name xxx_part_<n>_encode/decode
-    # TODO: perhaps use fixed_n, n = :System.unique_integer([:positive])
-    # because name might be ""
+    # private func name fixed_<n>_encode/decode
     n = System.unique_integer([:positive])
     name = String.to_atom("fixed_#{n}_")
     encode = String.to_atom("#{name}encode")
@@ -616,23 +619,24 @@ defmodule Packeteer do
     consolidate(tail, opts, funcs, defs)
   end
 
-  defp do_fluid(name, opts) do
-    # return the ast for fluid macro to use
-    # opts[:name] is for possible later use when consolidating primitives
-    opts = Keyword.put_new(opts, :name, name)
-    encode = String.to_atom("#{opts[:name]}encode")
-    decode = String.to_atom("#{opts[:name]}decode")
+  defp fluid_ast(name, opts) do
+    # returns the ast for the fluid macro to use
+    opts =
+      opts
+      |> Keyword.put_new(:silent, true)
+
+    encode = String.to_atom("#{name}encode")
+    decode = String.to_atom("#{name}decode")
     fields = opts[:fields]
     values = opts[:defaults] || []
-    # join = opts[:join]
 
     {fields, defs} = consolidate(fields, opts)
 
     fixed_funcs =
       for {name, args} <- defs,
-          do: do_fixed(name, args)
+          do: fixed_ast(name, args)
 
-    q =
+    ast =
       quote do
         unquote_splicing(fixed_funcs)
 
@@ -641,7 +645,6 @@ defmodule Packeteer do
 
           encoded_kw =
             for {field, {encode, _}} <- unquote(fields) do
-              # {field, encode.(kw[field] || [])}
               if field == :fixed,
                 do: {field, encode.(kw)},
                 else: {field, encode.(field, kw[field])}
@@ -674,8 +677,12 @@ defmodule Packeteer do
         end
       end
 
-    # IO.puts(Macro.to_string(q))
-    q
+    ast = if opts[:private], do: do_defp(ast), else: ast
+
+    unless opts[:silent],
+      do: IO.puts(Macro.to_string(ast))
+
+    ast
   end
 
   @doc """
@@ -684,10 +691,6 @@ defmodule Packeteer do
 
 
   """
-  defmacro fluid(name, opts) do
-    qq = do_fluid(name, opts)
-    qq = if opts[:private], do: do_defp(qq), else: qq
-    IO.puts(Macro.to_string(qq))
-    qq
-  end
+  defmacro fluid(name, opts),
+    do: fluid_ast(name, opts)
 end
