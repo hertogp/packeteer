@@ -174,10 +174,12 @@ defmodule Packeteer do
   end
 
   defp generic_defaults(opts) do
+    # join only used by fluid/2 encoder
     opts
     |> Keyword.put_new(:docstr, true)
-    |> Keyword.put_new(:private, false)
     |> Keyword.put_new(:silent, true)
+    |> Keyword.put_new(:join, true)
+    |> Keyword.put_new(:private, false)
     |> Keyword.put_new(:defaults, [])
   end
 
@@ -678,9 +680,6 @@ defmodule Packeteer do
 
     {fields, defs} = consolidate(fields, opts)
 
-    for field <- fields,
-        do: IO.inspect(field, label: :all?)
-
     fixed_funcs =
       for {name, args} <- defs,
           do: fixed_ast(name, args)
@@ -804,8 +803,89 @@ defmodule Packeteer do
 
   > ### Warning {: .warning}
   >
-  > If the last field definition is non-primitive, then the user supplied
-  > encoder/decoder is responsible for not failing a match.
+  > non-primitive decoders should always take care of matching out the remainder of
+  > given binary, if using bitstring expression, via `<<..., _::bits>>`,
+  > otherwise their decoding will fail.  If the last field definition is a
+  > primitive, then `fixed/2` will add the hidden `:skip__` field to ensure a
+  > match will match the remainder
+
+  ## Example
+
+
+      iex> mod = \"""
+      ...> defmodule RR do
+      ...>   import Packeteer
+      ...>
+      ...>   fluid("",
+      ...>     pattern: :soa,
+      ...>     fields: [
+      ...>       mname: {&name_enc/2, &name_dec/3},
+      ...>       rname: {&name_enc/2, &name_dec/3},
+      ...>       serial: uint(32),
+      ...>       refresh: uint(32),
+      ...>       retry: uint(32),
+      ...>       expire: uint(32),
+      ...>       minimum: uint(32)
+      ...>     ],
+      ...>     defaults: [
+      ...>       mname: "ns.icann.org",
+      ...>       rname: "noc@dns.icann.org",
+      ...>       serial: 2_024_041_834,
+      ...>       refresh: 7200,
+      ...>       retry: 3600,
+      ...>       expire: 1_209_600,
+      ...>       minimum: 3600
+      ...>     ]
+      ...>   )
+      ...>
+      ...>   def name_enc(_name, str) do
+      ...>     str
+      ...>     |> String.replace("@", ".", global: false)
+      ...>     |> String.split(".")
+      ...>     |> Enum.map(fn l -> <<byte_size(l)::8, l::binary>> end)
+      ...>     |> Enum.join()
+      ...>     |> Kernel.<>(<<0>>)
+      ...>   end
+      ...>
+      ...>   def name_dec(name, offset, bin),
+      ...>     do: name_dec(name, offset, bin, [])
+      ...>
+      ...>   def name_dec(name, offset, bin, acc) do
+      ...>     <<_::bits-size(offset), len::8, label::binary-size(len), _::bits>> = bin
+      ...>     offset = offset + 8 * (1 + len)
+      ...>
+      ...>     case len do
+      ...>       0 ->
+      ...>         dname = Enum.reverse(acc) |> Enum.join(".")
+      ...>
+      ...>         dname =
+      ...>           if name == :rname,
+      ...>             do: String.replace(dname, ".", "@", global: false),
+      ...>             else: dname
+      ...>
+      ...>         {offset, [{name, dname}], bin}
+      ...>
+      ...>       _ ->
+      ...>         name_dec(name, offset, bin, [label | acc])
+      ...>     end
+      ...>   end
+      ...> end
+      ...> \"""
+      iex> [{m, _}] = Code.compile_string(mod)
+      iex> bin = m.encode(:soa, [])  #=> <<2, 110, 115, 5, 105, 99, 97, ...>>
+      iex> {offset, kw, _bin} = m.decode(:soa, 0, bin)
+      iex> offset
+      424
+      iex> kw
+      [
+        mname: "ns.icann.org",
+        rname: "noc@dns.icann.org",
+        serial: 2024041834,
+        refresh: 7200,
+        retry: 3600,
+        expire: 1209600,
+        minimum: 3600
+      ]
 
   """
   defmacro fluid(name, opts),
