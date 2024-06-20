@@ -173,6 +173,14 @@ defmodule Packeteer do
     fld in [:bits, :bitstring, :bytes, :binary] and arg in [[], [nil]]
   end
 
+  defp generic_defaults(opts) do
+    opts
+    |> Keyword.put_new(:docstr, true)
+    |> Keyword.put_new(:private, false)
+    |> Keyword.put_new(:defaults, [])
+    |> Keyword.put_new(:silent, true)
+  end
+
   # [[ FRAGMENTS ]]
   # - bit syntax:  <<var::spec, ..>>
   # - var::spec is a segment of the bit syntax expression
@@ -371,14 +379,7 @@ defmodule Packeteer do
 
   defp fixed_ast(name, opts) do
     # returns the ast for the fixed macro to use
-    # ensure default values for options are present
-    opts =
-      opts
-      |> Keyword.put_new(:docstr, true)
-      |> Keyword.put_new(:private, false)
-      |> Keyword.put_new(:defaults, [])
-      |> Keyword.put_new(:silent, true)
-
+    opts = generic_defaults(opts)
     fields = opts[:fields]
     values = opts[:defaults]
     all? = all?(fields)
@@ -621,10 +622,7 @@ defmodule Packeteer do
 
   defp fluid_ast(name, opts) do
     # returns the ast for the fluid macro to use
-    opts =
-      opts
-      |> Keyword.put_new(:silent, true)
-
+    opts = generic_defaults(opts)
     encode = String.to_atom("#{name}encode")
     decode = String.to_atom("#{name}decode")
     fields = opts[:fields]
@@ -688,7 +686,6 @@ defmodule Packeteer do
   @doc """
   Defines encode/decode functions for given `name` and `opts`, which must include
   a list of field definitions.
-
 
   """
   defmacro fluid(name, opts),
