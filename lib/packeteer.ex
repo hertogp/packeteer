@@ -477,18 +477,29 @@ defmodule Packeteer do
 
   whose signatures (assuming name is "name_") are:
   ```
-  name_encode(Keyword.t) :: binary | {:error, binary}
-  name_decode(non_neg_integer, binary) :: {non_neg_integer, Keyword.t, binary} | {:error, binary}
+  name_encode(Keyword.t) :: binary | {:error, reason}
+  name_decode(offset, binary) :: {offset, Keyword.t, binary} | {:error, reason}
 
   # or when using the option `pattern: literal`:
   name_encode(literal, Keyword.t) :: binary | {:error, binary}
-  name_decode(literal, non_neg_integer, binary) :: {non_neg_integer, Keyword.t, binary} | {:error, binary}
+  name_decode(literal, offset, binary) :: {offset, Keyword.t, binary} | {:error, reason}
+
+  # where:
+  # - offset is a non_negative_integer
+  # - reason a, hopefully, informative  binary
+  # - literal is an expression that is its own ast
   ```
 
-  Where the [literal](https://hexdocs.pm/elixir/typespecs.html#literals) is an
-  expression that is its own ast.  If some module M has only a single call
-  to `fixed/2`, using `name = ""` will define: `M.encode(kw)` and
-  `M.decode(offset, bin)`.
+  See [literal](https://hexdocs.pm/elixir/typespecs.html#literals) for more
+  information. If some module M has only a single call to `fixed/2`, using
+  `name = ""` will define: `M.encode(kw)` and `M.decode(offset, bin)`.
+
+  > #### Info {: .info}
+  > If the last field in the list of definitions does not match the remaining
+  > bits of any given binary, a hidden field `:skip__` is added to the
+  > expression to ensure matching won't fail.  Upon encoding it encodes
+  > an empty string so it won't add any bits to the encoded binary.
+
 
   - `:fields` a mandatory list of [primitive](#primitives) field definitions
   used to construct the bitstring match expression for both the encode and
@@ -514,7 +525,7 @@ defmodule Packeteer do
   - `:after_decode`, either an anonymous function or a function reference whose
   signature is
   ```
-  fun(non_neg_integer, Keyword.t, binary) :: {non_neg_integer, Keyword.t, binary}
+  fun(offset, Keyword.t, binary) :: {offset, Keyword.t, binary}
   ```
   If specified, this function will be called with the results of decoding and its
   return values will be used as the final result of the decoder function.
@@ -728,18 +739,32 @@ defmodule Packeteer do
   Defines encode/decode functions for given `name` and `opts`, which must include
   a list of field definitions.
 
+  The signatures of the `fluid/2` generated encode/decode functions are:
+  ```
+  encode(Keyword.t) :: binary | Keyword.t | {:error, reason}
+  decode(offset, Keyword.t, binary) :: Keyword.t | {:error, reason}
+
+  # or, when option `:pattern` is set to :literal:
+  encode(Keyword.t) :: binary | Keyword.t | {:error, reason}
+  decode(offset, Keyword.t, binary) :: Keyword.t | {:error, reason}
+
+  # where:
+  # - offset is a non_neg_integer
+  # - reason is a binary
+  ```
+
   Sometimes binary protocols require more logic than what can be achieved
   through mere bitstring match expressions.  `fluid/2` allows for non-primitive
   field definitions consisting of a field whose value is a two-tuple containing
-  the function references to a user supplied encode resp. decode function.
-  Their signatures are:
+  captured function name and arity of the user supplied, field specific, encode
+  resp. decode function. Their signatures are:
 
   ```
-  encoder(atom, any) :: binary
-  decoder(atom, offset, binary) :: {offset, [{atom, any}], binary}
+  encoder(name, any) :: binary
+  decoder(name, offset, binary) :: {offset, [{name, any}], binary}
 
   # where:
-  # - atom is the name of the field being encoded/decoded
+  # - name (an atom) of the field being encoded/decoded
   # - offset is a non_negative_integer
   ```
 
@@ -747,23 +772,37 @@ defmodule Packeteer do
   function might take different actions and/or be a series of public or private
   functions that do the work that a straight bitstring expression can't.
 
+  Note that the return value of the decoder:
+  - must specify the new offset in _bits_, not bytes (!)
+  - preferably use the same `name` in its `[{name, value}]` return (gets added as-is)
+  - prererably include the original `binary` in its return tuple.
+
+  Using a different `name` would probably be confusing.  Returning only the
+  unprocessed part of the `binary` is certainly possible, but requires the
+  returned `offset` to be set to `0` bits.
+
   The `name` and `opts` work the same as in `fixed/2`: the `name` is used as prefix
   in the fluid generated encode/decode functions and `opts` must have the mandatory
   `fields` entry listing the field definitions.  All the extra options of `fixed/2`
   are also supported by `fluid/2`.
 
-  One extra additional option is supported by `fluid/2`:
+  One additional option is supported by `fluid/2`:
 
   - `:join`, either `true` (default) or `false`, speficies whether the binary
-  parts are joined together by the fluid encoder or not.  This might help
-  troubleshooting an encoder that seems to misbehave.  Ofcourse, you can also
-  set `:silent` to false to have the generated encode/decode funtions printed
-  to stdout during compilation.
+  parts are joined together by the fluid encoder or not.  If:
+    - `true`, the binary parts are joined and returned by the fluid encoder
+    - `false`, the list of fieldnames and their binary representation is returned instead.
 
+  Finally, `fluid/2` allows for a mixture of primitive and non-primitive field
+  definitions.  Consecutive primitives are collected and turned into a private `fixed/2`
+  generated encode/decode pair.  If the last field is a primitive, the fixed
+  encode/decode function will have a hidden `:skip__` field so the binary
+  matching won't fail and remaining bits are always matched out.
 
-
-
-
+  > ### Warning {: .warning}
+  >
+  > If the last field definition is non-primitive, then the user supplied
+  > encoder/decoder is responsible for not failing a match.
 
   """
   defmacro fluid(name, opts),
