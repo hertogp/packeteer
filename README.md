@@ -4,7 +4,7 @@ Helper library to make encoding/decoding binaries easier.
 
 When a binary has a fixed layout, [`fixed/2`](`Packeteer.fixed/2`) generates
 the encode resp. decode function based on a given name and options, which must
-include a list of field definitions.
+include a list of [_primitive_](`Packeteer#primitives`) field definitions.
 
 ## Fixed fields
 
@@ -99,10 +99,19 @@ the first encoder/decoder), the offset into the binary and the binary itself.
 It is required to return `{offset, kw, binary}`, where kw is the updated
 keyword list of field,value-pairs.
 
+## options
 
+Both [`fixed/2`](`Packeteer.fixed/2`) and [`mixed/2`](`Packeteer.mixed/2`)
+support a number of options, amongst wich:
 
+- `:pattern`, to define an extra first argument in the call signature
+- `:before_encode`, to manipulate field,value-pairs before actual encoding
+- `:after_decode`, to manipulate the returned results
+- `:docstr`, to allow/prevent docstrings to be generated
+- `:private`, to define the encode/decode functions as private functions
+- `:silent`, to print out the defined functions during compilation (or not)
 
-
+See [`fixed/2`](`Packeteer.fixed/2`) for more information.
 
 ## related work
 This is yet another library to aid in the development of custom binary
