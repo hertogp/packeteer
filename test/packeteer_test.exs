@@ -67,5 +67,18 @@ defmodule PacketeerTest do
       assert <<194, 42, 0, 0>> == P.float32_encode(a: -42.5)
       assert {32, [a: -42.5], <<194, 42, 0, 0>>} == P.float32_decode(0, <<194, 42, 0, 0>>)
     end
+
+    test "float64" do
+      alias Primitives, as: P
+      assert <<64, 69, 64, 0, 0, 0, 0, 0>> == P.float64_encode([])
+
+      assert {64, [a: 42.5], <<64, 69, 64, 0, 0, 0, 0, 0>>} ==
+               P.float64_decode(0, <<64, 69, 64, 0, 0, 0, 0, 0>>)
+
+      assert <<192, 69, 64, 0, 0, 0, 0, 0>> == P.float64_encode(a: -42.5)
+
+      assert {64, [a: -42.5], <<192, 69, 64, 0, 0, 0, 0, 0>>} ==
+               P.float64_decode(0, <<192, 69, 64, 0, 0, 0, 0, 0>>)
+    end
   end
 end
