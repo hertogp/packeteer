@@ -139,6 +139,8 @@ defmodule PacketeerTest do
       alias Primitives, as: P
       assert <<226, 130, 172>> == P.utf8_encode([])
       assert "€" == P.utf8_encode([])
+      assert {40, [a: 8364], "10€"} == P.utf8_decode(16, "10€")
+      assert {40, [a: 8364], "10€--"} == P.utf8_decode(16, "10€--")
     end
   end
 end
