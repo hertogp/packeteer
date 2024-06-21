@@ -11,6 +11,8 @@ defmodule PacketeerTest do
     fixed("float64_", fields: [a: float(64)], defaults: [a: 42.5])
     fixed("binary_", fields: [a: binary(8)], defaults: [a: "01234567"])
     fixed("bytes_", fields: [a: bytes(8)], defaults: [a: "01234567"])
+    fixed("bits_", fields: [a: bits(16)], defaults: [a: "42"])
+    fixed("bitstring_", fields: [a: bitstring(16)], defaults: [a: "42"])
   end
 
   describe "fixed primitives" do
@@ -85,10 +87,10 @@ defmodule PacketeerTest do
 
     test "binary" do
       alias Primitives, as: P
-      assert "01234567" = P.binary_encode([])
-      assert "76543210" = P.binary_encode(a: "76543210")
+      assert "01234567" == P.binary_encode([])
+      assert "76543210" == P.binary_encode(a: "76543210")
       # binary encoder only takes what it needs, no complaintss
-      assert "76543210" = P.binary_encode(a: "76543210---")
+      assert "76543210" == P.binary_encode(a: "76543210---")
       assert {64, [a: "76543210"], "76543210"} = P.binary_decode(0, "76543210")
       assert {64, [a: "76543210"], "76543210---"} = P.binary_decode(0, "76543210---")
 
@@ -97,14 +99,26 @@ defmodule PacketeerTest do
 
     test "bytes" do
       alias Primitives, as: P
-      assert "01234567" = P.bytes_encode([])
-      assert "76543210" = P.bytes_encode(a: "76543210")
+      assert "01234567" == P.bytes_encode([])
+      assert "76543210" == P.bytes_encode(a: "76543210")
       # bytes encoder only takes what it needs, no complaintss
-      assert "76543210" = P.bytes_encode(a: "76543210---")
+      assert "76543210" == P.bytes_encode(a: "76543210---")
       assert {64, [a: "76543210"], "76543210"} = P.bytes_decode(0, "76543210")
       assert {64, [a: "76543210"], "76543210---"} = P.bytes_decode(0, "76543210---")
 
-      {:error, _reason} = P.bytes_encode(a: "---")
+      {:error, reason} = P.bytes_encode(a: "---")
+      assert is_binary(reason)
+    end
+
+    test "bits" do
+      alias Primitives, as: P
+      assert "42" == P.bits_encode([])
+      assert "24" == P.bits_encode(a: "24")
+      # bits takes what it needs
+      assert "24" == P.bits_encode(a: "24--")
+      assert {16, [a: "99"], "99---"} = P.bits_decode(0, "99---")
+      assert {40, [a: "99"], "---99"} = P.bits_decode(24, "---99")
+      assert {40, [a: "99"], "---99---"} = P.bits_decode(24, "---99---")
     end
   end
 end
