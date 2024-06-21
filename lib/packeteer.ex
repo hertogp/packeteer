@@ -17,7 +17,7 @@ defmodule Packeteer do
   Pass in an optional second argument (:little or :native) if the
   default doesn't suit your needs.
 
-  The fragment is used as the right hand side of an unsigned integer segment
+  Used as the right hand side of an unsigned integer segment
   in a bitstring match expression.
 
   """
@@ -37,7 +37,7 @@ defmodule Packeteer do
   Pass in an optional second argument (`:little` or `:native`) if the
   default doesn't suit your needs.
 
-  The fragment is used as the right hand side of a signed integer segment
+  Used as the right hand side of a signed integer segment
   in a bitstring match expression.
 
   """
@@ -56,7 +56,7 @@ defmodule Packeteer do
   Pass in an optional second argument (`:little` or `:native`) if the
   default doesn't suit your needs.
 
-  The fragment is used as the right hand side of a float segment
+  Used as the right hand side of a float segment
   in a bitstring match expression.
 
   """
@@ -85,7 +85,7 @@ defmodule Packeteer do
   earlier field that decodes an integer. When omitted, matches the remaining
   bytes.
 
-  The fragment is used as the right hand side of a binary segment
+  Used as the right hand side of a binary segment
   in a bitstring match expression.
 
   """
@@ -111,7 +111,7 @@ defmodule Packeteer do
   earlier field that decodes an integer. When omitted, matches the remaining
   bits.
 
-  The fragment is used as the right hand side of a bitstring segment
+  Used as the right hand side of a bitstring segment
   in a bitstring match expression.
 
   """
@@ -499,7 +499,7 @@ defmodule Packeteer do
 
   > #### Info {: .info}
   > If the last field in the list of definitions does not match the remaining
-  > bits of any given binary, a hidden field `:skip__` is added to the
+  > bits of any given binary, a hidden field `:skip__` is appended to the
   > expression to ensure matching won't fail.  It is removed from the resulting
   > keyword list prior to being handed to the `:after_decoding` function (if any).
   > Upon encoding it encodes an empty string so it won't add any bits to
