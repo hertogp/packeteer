@@ -59,5 +59,13 @@ defmodule PacketeerTest do
       assert <<209, 80>> == P.float16_encode(a: -42.5)
       assert {16, [a: -42.5], <<209, 80>>} == P.float16_decode(0, <<209, 80>>)
     end
+
+    test "float32" do
+      alias Primitives, as: P
+      assert <<66, 42, 0, 0>> == P.float32_encode([])
+      assert {32, [a: 42.5], <<66, 42, 0, 0>>} == P.float32_decode(0, <<66, 42, 0, 0>>)
+      assert <<194, 42, 0, 0>> == P.float32_encode(a: -42.5)
+      assert {32, [a: -42.5], <<194, 42, 0, 0>>} == P.float32_decode(0, <<194, 42, 0, 0>>)
+    end
   end
 end
