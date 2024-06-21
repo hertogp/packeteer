@@ -9,7 +9,7 @@ defmodule Packeteer do
   # [[ PRIMITIVES ]]
 
   @doc """
-  Returns a quoted fragment for an unsigned integer for given `size` in _bits_.
+  Returns the quoted rhs for an unsigned integer segment for given `size` in _bits_.
 
   The `size` argument can also be a simple expression like `:a * 8` (yielding an integer) when `:a` is an
   earlier field that decodes an integer.
@@ -29,7 +29,7 @@ defmodule Packeteer do
   end
 
   @doc """
-  Returns a quoted fragment for an signed integer for given `size` in _bits_.
+  Returns the quoted rhs for an signed integer segment for given `size` in _bits_.
 
   The `size` argument can also be a simple expression like `:a * 8` when `:a` is an
   earlier field that decodes an integer.
@@ -49,7 +49,7 @@ defmodule Packeteer do
   end
 
   @doc """
-  Returns quoted fragment for a float for given `size` in _bits_.
+  Returns the quoted rhs for a float segment for given `size` in _bits_.
 
   The `size` argument must be one of `[16, 32, 64]`.
 
@@ -79,7 +79,7 @@ defmodule Packeteer do
   end
 
   @doc """
-  Returns a quoted fragment for a binary of given `size` in _bytes_.
+  Returns the quoted rhs for a binary segment of given `size` in _bytes_.
 
   The `size` argument can also be a simple expression like `:a * 8` when `:a` is an
   earlier field that decodes an integer. When omitted, matches the remaining
@@ -105,7 +105,7 @@ defmodule Packeteer do
   end
 
   @doc """
-  Returns a quoted fragment for a bitstring of given `size` in _bits_.
+  Returns the quoted rhs for a bitstring segment of given `size` in _bits_.
 
   The `size` argument can also be a simple expression like `:a * 8` when `:a` is an
   earlier field that decodes an integer. When omitted, matches the remaining
@@ -120,7 +120,7 @@ defmodule Packeteer do
     do: bits(size)
 
   @doc """
-  Returns a quoted fragment for a utf8 codepoint.
+  Returns the quoted rhs for a utf8 segment.
 
   Utf8 codepoints are encoded in (or decoded from) 1..4 bytes. The bitsyntax
   only supports an endianness modifier, so this can encode or decode only 1 utf
@@ -136,7 +136,7 @@ defmodule Packeteer do
     do: quote(do: utf8 - unquote(var(endian)))
 
   @doc """
-  Returns a quoted fragment for a utf16 codepoint.
+  Returns the quoted rhs for a utf16 segment.
 
   Utf16 codepoints are encoded in (or decoded from) two 16 bit units
   (i.e. 4 bytes). The bitsyntax only supports an endianness modifier, so this
@@ -151,7 +151,7 @@ defmodule Packeteer do
     do: quote(do: utf16 - unquote(var(endian)))
 
   @doc """
-  Returns a quoted fragment for a utf32 codepoint.
+  Returns the quoted rhs for a utf32 segment.
 
   Utf32 codepoints are encoded in (or decoded from) 32 bits (i.e. 4 bytes).
   The bitsyntax only supports an endianness modifier, so this can encode or
