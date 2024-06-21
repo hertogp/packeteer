@@ -8,6 +8,8 @@ include a list of [_primitive_](`Packeteer#primitives`) field definitions.
 
 ## Fixed fields
 
+This is what a DNS header encoder/decoder could look like:
+
 ```elixir
 defmodule Header do
   import Packeteer
