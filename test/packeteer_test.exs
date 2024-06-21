@@ -14,6 +14,8 @@ defmodule PacketeerTest do
     fixed("bits_", fields: [a: bits(16)], defaults: [a: "42"])
     fixed("bitstring_", fields: [a: bitstring(16)], defaults: [a: "42"])
     fixed("utf8_", fields: [a: utf8()], defaults: [a: 8364])
+    fixed("utf16_", fields: [a: utf16()], defaults: [a: 8364])
+    fixed("utf32_", fields: [a: utf32()], defaults: [a: 8364])
   end
 
   describe "fixed primitives" do
@@ -136,11 +138,23 @@ defmodule PacketeerTest do
     end
 
     test "utf8" do
+      # https://www.fileformat.info/info/unicode/char/20AC/index.htm
       alias Primitives, as: P
       assert <<226, 130, 172>> == P.utf8_encode([])
       assert "€" == P.utf8_encode([])
       assert {40, [a: 8364], "10€"} == P.utf8_decode(16, "10€")
       assert {40, [a: 8364], "10€--"} == P.utf8_decode(16, "10€--")
+    end
+
+    test "utf16" do
+      # https://www.fileformat.info/info/unicode/char/20AC/index.htm
+      alias Primitives, as: P
+      assert <<32, 172>> == P.utf16_encode([])
+      assert {16, [a: 8364], <<32, 172>>} == P.utf16_decode(0, <<32, 172>>)
+      assert {16, [a: 8364], <<32, 172, "---">>} == P.utf16_decode(0, <<32, 172, "---">>)
+
+      assert {40, [a: 8364], <<"---", 32, 172, "---">>} ==
+               P.utf16_decode(24, <<"---", 32, 172, "---">>)
     end
   end
 end
