@@ -50,15 +50,55 @@ Header.decode/2 #- takes an offset and a binary, returns {offset, kw, binary}
 ```
 
 Since the first argument (name) is `""`, the resulting names are simply
-`encode` resp. `decode`.  See [`fixed/2`](`Packeteer.fixed/2`) for another
-example.
+`encode/1` resp. `decode/2`.  The functions are generated with a docstring. For
+`encode/1` it would show the list of field definitions, their default values
+and the bitstring expression used for encoding.  For `decode/2` it would show
+basically the same.  See [`fixed/2`](`Packeteer.fixed/2`) for another example.
 
 ## Mixed fields
 
-If some fields cannot be expressed as a bitstring expression because the
-decoding is more involved than a bitstring match operation,
+If you need a little more _umpf_ for decoding a particular piece of a binary,
 [`mixed/2`](`Packeteer.mixed/2`)  is your friend.  It allows for mixing
-in custom encoder/decoder's.
+in custom encoder/decoder's.  Suppose you had a `Helper` library exposing
+some of those custom encoder/decoder's you could, e.g. for a DNS question
+part, do something like this:
+
+```elixir
+defmodule Question do
+  import Packeteer
+  import Helper
+
+  mixed("",
+    fields: [
+      name: {&name_enc/2, &name_dec/4},
+      type: uint(16),
+      class: uint(16)
+    ],
+    defaults: [
+      type: 1,  # :A
+      class: 1, # :IN
+    ]
+  )
+end
+```
+
+The above would again define an encode resp. decode function as:
+
+```elixir
+Question.encode/1
+Question.decode/2
+```
+
+The custom `name_enc/2` would receive the field name (`:name`) and the value to
+encode.  Including the name in the call makes it possible for a custom encoder
+to act differently for different field names.
+
+The custom `name_dec/4` would receive the field name (:name), the keyword list
+decoded thus far (here that would be `[]` since its the first encoder/decoder),
+the offset into the binary and the binary itself.  It is required to return
+`{offset, kw, binary}`, where kw is the updated keyword list of
+field,value-pairs.
+
 
 
 
