@@ -756,9 +756,9 @@ defmodule Packeteer do
   ```
 
   Sometimes binary protocols require more logic than what can be achieved
-  through mere bitstring match expressions.  `fluid/2` allows for non-primitive
+  through bitstring match expressions alone.  `fluid/2` allows for non-primitive
   field definitions consisting of a field whose value is a two-tuple containing
-  captured function name and arity of the user supplied, field specific, encode
+  captured function name and arity of a user supplied, field specific, encode
   resp. decode function. Their signatures are:
 
   ```
@@ -766,7 +766,7 @@ defmodule Packeteer do
   decoder(name, offset, binary) :: {offset, [{name, any}], binary}
 
   # where:
-  # - name (an atom) of the field being encoded/decoded
+  # - name is an atom denoting the field being encoded/decoded
   # - offset is a non_negative_integer
   ```
 
@@ -776,7 +776,7 @@ defmodule Packeteer do
 
   Note that the return value of the decoder:
   - must specify the new offset in _bits_, not bytes (!)
-  - preferably use the same `name` in its `[{name, value}]` return (gets added as-is)
+  - preferably use the same `name` in its `[{name, value}]` return (is used as-is)
   - prererably include the original `binary` in its return tuple.
 
   Using a different `name` would probably be confusing.  Returning only the
@@ -785,7 +785,7 @@ defmodule Packeteer do
 
   The `name` and `opts` work the same as in `fixed/2`: the `name` is used as prefix
   in the fluid generated encode/decode functions and `opts` must have the mandatory
-  `fields` entry listing the field definitions.  All the extra options of `fixed/2`
+  `fields` entry listing the field definitions.  All the other options of `fixed/2`
   are also supported by `fluid/2`.
 
   One additional option is supported by `fluid/2`:
@@ -813,7 +813,7 @@ defmodule Packeteer do
 
   Suppose domain name compression was not a thing and you're defining a module
   `RR` that decodes the rdata section of different resource records, starting
-  with a SOA RR. So, with one helper encoder/decoder's, you could do something
+  with a SOA record. So, with one helper encoder/decoder, you could do something
   like this:
 
       iex> mod = \"""
