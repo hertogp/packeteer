@@ -6,6 +6,9 @@ defmodule PacketeerTest do
     import Packeteer
     fixed("uint_", fields: [a: uint(8)], defaults: [a: 128])
     fixed("sint_", fields: [a: sint(8)], defaults: [a: 127])
+    fixed("float16_", fields: [a: float(16)], defaults: [a: 42.5])
+    fixed("float32_", fields: [a: float(32)], defaults: [a: 42.5])
+    fixed("float64_", fields: [a: float(64)], defaults: [a: 42.5])
   end
 
   describe "fixed primitives" do
@@ -47,6 +50,14 @@ defmodule PacketeerTest do
         assert(<<n>> == P.sint_encode(a: n))
         assert({8, [a: n], <<n>>} == P.sint_decode(0, <<n>>))
       end
+    end
+
+    test "float16" do
+      alias Primitives, as: P
+      assert <<81, 80>> == P.float16_encode([])
+      assert {16, [a: 42.5], <<81, 80>>} == P.float16_decode(0, <<81, 80>>)
+      assert <<209, 80>> == P.float16_encode(a: -42.5)
+      assert {16, [a: -42.5], <<209, 80>>} == P.float16_decode(0, <<209, 80>>)
     end
   end
 end

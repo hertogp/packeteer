@@ -64,7 +64,7 @@ defmodule Packeteer do
   def float(size, endian \\ :big) do
     endian = var(endian)
     size = var(size)
-    quote(do: integer - size(unquote(size)) - unquote(endian) - signed)
+    quote(do: float - size(unquote(size)) - unquote(endian))
   end
 
   @doc """
