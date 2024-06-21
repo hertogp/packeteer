@@ -708,21 +708,23 @@ defmodule Packeteer do
 
         @doc unquote(decode_doc)
         def unquote(decode_fun)(unquote_splicing(decode_args)) do
+          # bin is included in state in case decoders "eat" the binary
+          # by returning the unprocessed part (so offset = 0)
           state = %{offset: offset, bin: bin, kw: []}
 
           map =
             Enum.reduce(unquote(fields), state, fn fdef, acc ->
               {field, {_, decode}} = fdef
 
-              {offset, kw, bin} =
-                if field == :fixed,
-                  do: decode.(acc.offset, acc.bin),
-                  else: decode.(field, acc.offset, acc.bin)
+              case field do
+                :fixed ->
+                  {offset, kw, bin} = decode.(acc.offset, acc.bin)
+                  %{acc | offset: offset, bin: bin, kw: acc.kw ++ kw}
 
-              acc
-              |> Map.put(:offset, offset)
-              |> Map.put(:bin, bin)
-              |> Map.put(:kw, acc.kw ++ kw)
+                _ ->
+                  {offset, kw, bin} = decode.(field, acc.kw, acc.offset, acc.bin)
+                  %{acc | offset: offset, bin: bin, kw: kw}
+              end
             end)
 
           {offset, kw, bin} = {map.offset, map.kw, map.bin}
@@ -824,8 +826,8 @@ defmodule Packeteer do
       ...>   fluid("",
       ...>     pattern: :soa,
       ...>     fields: [
-      ...>       mname: {&name_enc/2, &name_dec/3},
-      ...>       rname: {&name_enc/2, &name_dec/3},
+      ...>       mname: {&name_enc/2, &name_dec/4},
+      ...>       rname: {&name_enc/2, &name_dec/4},
       ...>       serial: uint(32),
       ...>       refresh: uint(32),
       ...>       retry: uint(32),
@@ -852,26 +854,24 @@ defmodule Packeteer do
       ...>     |> Kernel.<>(<<0>>)
       ...>   end
       ...>
-      ...>   def name_dec(name, offset, bin),
-      ...>     do: name_dec(name, offset, bin, [])
+      ...>   def name_dec(name, kw, offset, bin) do
+      ...>     {offset, dname} = name_decp(offset, bin, [])
+      ...>     dname =
+      ...>       if name == :rname,
+      ...>         do: String.replace(dname, ".", "@", global: false),
+      ...>         else: dname
       ...>
-      ...>   def name_dec(name, offset, bin, acc) do
+      ...>     # appending maintains field order (put would not & replace all duplicates as well)
+      ...>     {offset, kw ++ [{name, dname}], bin}
+      ...>   end
+      ...>
+      ...>   defp name_decp(offset, bin, acc) do
       ...>     <<_::bits-size(offset), len::8, label::binary-size(len), _::bits>> = bin
       ...>     offset = offset + 8 * (1 + len)
       ...>
       ...>     case len do
-      ...>       0 ->
-      ...>         dname = Enum.reverse(acc) |> Enum.join(".")
-      ...>
-      ...>         dname =
-      ...>           if name == :rname,
-      ...>             do: String.replace(dname, ".", "@", global: false),
-      ...>             else: dname
-      ...>
-      ...>         {offset, [{name, dname}], bin}
-      ...>
-      ...>       _ ->
-      ...>         name_dec(name, offset, bin, [label | acc])
+      ...>       0 -> {offset, Enum.reverse(acc) |> Enum.join(".")}
+      ...>       _ -> name_decp(offset, bin, [label | acc])
       ...>     end
       ...>   end
       ...> end
