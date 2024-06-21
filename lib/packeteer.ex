@@ -820,7 +820,7 @@ defmodule Packeteer do
       ...> defmodule RR do
       ...>   import Packeteer
       ...>
-      ...>   fluid("p_",
+      ...>   fluid("",
       ...>     pattern: :soa,
       ...>     fields: [
       ...>       mname: {&name_enc/2, &name_dec/3},
@@ -875,9 +875,9 @@ defmodule Packeteer do
       ...>   end
       ...> end
       ...> \"""
-      iex> [{m, _}] = Code.compile_string(mod)
-      iex> bin = m.p_encode(:soa, [])  #=> <<2, 110, 115, 5, 105, 99, 97, ...>>
-      iex> {offset, kw, _bin} = m.p_decode(:soa, 0, bin)
+      iex> [{rr, _}] = Code.compile_string(mod)
+      iex> bin = rr.encode(:soa, [])  #=> <<2, 110, 115, 5, 105, 99, 97, ...>>
+      iex> {offset, kw, _bin} = rr.decode(:soa, 0, bin)
       iex> offset
       424
       iex> kw
