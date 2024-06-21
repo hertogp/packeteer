@@ -175,7 +175,7 @@ defmodule Packeteer do
   end
 
   defp generic_defaults(opts) do
-    # join only used by fluid/2 encoder
+    # join only used by mixed/2 encoder
     opts
     |> Keyword.put_new(:docstr, true)
     |> Keyword.put_new(:silent, true)
@@ -285,7 +285,7 @@ defmodule Packeteer do
         ```
         """
       else
-        "The encoder is produced by `fluid2`."
+        "The encoder is produced by `mixed2`."
       end}
 
       #{if values == [] do
@@ -332,7 +332,7 @@ defmodule Packeteer do
         ```
         """
       else
-        "The encoder is produced by `fluid2`."
+        "The encoder is produced by `mixed2`."
       end}
       """
     end
@@ -591,7 +591,7 @@ defmodule Packeteer do
   defmacro fixed(name, opts),
     do: fixed_ast(name, opts)
 
-  # [[ FLUID GENERATOR ]]
+  # [[ mixed GENERATOR ]]
 
   defp f_type({_fieldname, v}) do
     # check type of value for a given field
@@ -606,7 +606,7 @@ defmodule Packeteer do
   # - funcs, list of function calls, including new, private fixed en/decoder
   # - defs, list of ast's that will define the private fixed en/decoders
   defp consolidate(fields, opts) do
-    # this is where consolidation starts, only used by `fluid_ast`
+    # this is where consolidation starts, only used by `mixed_ast`
     annotated_fields =
       for field <- fields do
         {f_type(field), field}
@@ -663,8 +663,8 @@ defmodule Packeteer do
     consolidate(tail, opts, funcs, defs)
   end
 
-  defp fluid_ast(name, opts) do
-    # returns the ast for the fluid macro to use
+  defp mixed_ast(name, opts) do
+    # returns the ast for the mixed macro to use
     opts = generic_defaults(opts)
     fields = opts[:fields]
     values = opts[:defaults]
@@ -745,11 +745,11 @@ defmodule Packeteer do
   a list of field definitions.
 
   Sometimes binary protocols require more logic than what can be achieved
-  through bitstring match expressions alone.  `fluid/2` allows for
+  through bitstring match expressions alone.  `mixed/2` allows for
   non-primitive field definitions consisting of captured encoder/decoder
   function pairs.
 
-  The signatures of the `fluid/2` generated encode/decode functions are:
+  The signatures of the `mixed/2` generated encode/decode functions are:
   ```
   encode(Keyword.t) :: binary | Keyword.t | {:error, reason}
   decode(offset, Keyword.t, binary) :: Keyword.t | {:error, reason}
@@ -765,18 +765,18 @@ defmodule Packeteer do
   ```
 
   The `name` and `opts` work the same as in `fixed/2`: the `name` is used as
-  prefix in the fluid generated encode/decode function names and `opts` must
+  prefix in the mixed generated encode/decode function names and `opts` must
   have the mandatory `fields` entry, listing the field definitions.  All the
-  other options of `fixed/2` are also supported by `fluid/2`.
+  other options of `fixed/2` are also supported by `mixed/2`.
 
-  One additional option is supported by `fluid/2`:
+  One additional option is supported by `mixed/2`:
 
   - `:join`, either `true` (default) or `false`, specifies whether the binary
-  parts are joined together by the fluid encoder or not.  If:
-    - `true`, the binary parts are joined and returned by the fluid encoder
+  parts are joined together by the mixed encoder or not.  If:
+    - `true`, the binary parts are joined and returned by the mixed encoder
     - `false`, the list of fieldnames and their binary representation is returned instead.
 
-  Finally, `fluid/2` allows for a mixture of primitive and non-primitive field
+  Finally, `mixed/2` allows for a mixture of primitive and non-primitive field
   definitions.  Consecutive primitives are collected and turned into a private `fixed/2`
   generated encoder/decoder pair.  If the last field is a primitive, the fixed
   encode/decode function will have a hidden `:skip__` field so the binary
@@ -830,7 +830,7 @@ defmodule Packeteer do
       iex> defmodule RR do
       ...>   import Packeteer
       ...>
-      ...>   fluid("rdata_",
+      ...>   mixed("rdata_",
       ...>     pattern: :soa,
       ...>     fields: [
       ...>       mname: {&name_enc/2, &name_dec/4},
@@ -899,6 +899,6 @@ defmodule Packeteer do
       ]
 
   """
-  defmacro fluid(name, opts),
-    do: fluid_ast(name, opts)
+  defmacro mixed(name, opts),
+    do: mixed_ast(name, opts)
 end
