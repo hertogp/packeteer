@@ -1,6 +1,6 @@
 defmodule Packeteer do
   @moduledoc """
-  Declaratively create encode/decode functions for binary data.
+  Declaratively define encode/decode functions for binary data.
 
   """
 
