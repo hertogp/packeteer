@@ -40,7 +40,6 @@ defmodule Header do
       cd: 0,     # not check disabled
       rcode: 0,  # no error
     ])
-
 end
 ```
 
@@ -55,7 +54,8 @@ Since the first argument (name) is `""`, the resulting names are simply
 `encode/1` resp. `decode/2`.  The functions are generated with a docstring. For
 `encode/1` it would show the list of field definitions, their default values
 and the bitstring expression used for encoding.  For `decode/2` it would show
-basically the same.  See [`fixed/2`](`Packeteer.fixed/2`) for another example.
+basically the same, omitting the list of defaults.  See
+[`fixed/2`](`Packeteer.fixed/2`) for another example.
 
 ## Mixed fields
 
