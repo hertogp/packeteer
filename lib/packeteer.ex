@@ -891,10 +891,6 @@ defmodule Packeteer do
         minimum: 3600
       ]
 
-  Normally, you would set `:private` to `true` and provide only two public functions
-  `RR.encode/1` and `RR.decode/2` that would be called by the parser of the RR record
-  as a whole.
-
   """
   defmacro fluid(name, opts),
     do: fluid_ast(name, opts)
