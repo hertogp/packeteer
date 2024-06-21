@@ -156,5 +156,18 @@ defmodule PacketeerTest do
       assert {40, [a: 8364], <<"---", 32, 172, "---">>} ==
                P.utf16_decode(24, <<"---", 32, 172, "---">>)
     end
+
+    test "utf32" do
+      # https://www.fileformat.info/info/unicode/char/20AC/index.htm
+      alias Primitives, as: P
+      assert <<0, 0, 32, 172>> == P.utf32_encode([])
+      assert {32, [a: 8364], <<0, 0, 32, 172>>} == P.utf32_decode(0, <<0, 0, 32, 172>>)
+
+      assert {32, [a: 8364], <<0, 0, 32, 172, "---">>} ==
+               P.utf32_decode(0, <<0, 0, 32, 172, "---">>)
+
+      assert {56, [a: 8364], <<"---", 0, 0, 32, 172, "---">>} ==
+               P.utf32_decode(24, <<"---", 0, 0, 32, 172, "---">>)
+    end
   end
 end
