@@ -744,52 +744,30 @@ defmodule Packeteer do
   Defines encode/decode functions for given `name` and `opts`, which must include
   a list of field definitions.
 
+  Sometimes binary protocols require more logic than what can be achieved
+  through bitstring match expressions alone.  `fluid/2` allows for
+  non-primitive field definitions consisting of captured encoder/decoder
+  function pairs.
+
   The signatures of the `fluid/2` generated encode/decode functions are:
   ```
   encode(Keyword.t) :: binary | Keyword.t | {:error, reason}
   decode(offset, Keyword.t, binary) :: Keyword.t | {:error, reason}
 
-  # or, when option `:pattern` is set to :literal:
-  encode(Keyword.t) :: binary | Keyword.t | {:error, reason}
-  decode(offset, Keyword.t, binary) :: Keyword.t | {:error, reason}
+  # or, when option `:pattern` is set to a literal
+  encode(literal, Keyword.t) :: binary | Keyword.t | {:error, reason}
+  decode(literal, offset, Keyword.t, binary) :: Keyword.t | {:error, reason}
 
   # where:
   # - offset is a non_neg_integer
   # - reason is a binary
+  # - literal is an expression that is its own ast (e.g. :id, or %{id: 42})
   ```
 
-  Sometimes binary protocols require more logic than what can be achieved
-  through bitstring match expressions alone.  `fluid/2` allows for non-primitive
-  field definitions consisting of a field whose value is a two-tuple containing
-  captured function name and arity of a user supplied, field specific, encode
-  resp. decode function. Their signatures are:
-
-  ```
-  encoder(name, any) :: binary
-  decoder(name, offset, binary) :: {offset, [{name, any}], binary}
-
-  # where:
-  # - name is an atom denoting the field being encoded/decoded
-  # - offset is a non_negative_integer
-  ```
-
-  By including the field name in the signature, the user supplied encode/decode
-  function might take different actions and/or be a series of public or private
-  functions that do the work that a straight bitstring expression can't.
-
-  Note that the return value of the decoder:
-  - must specify the new offset in _bits_, not bytes (!)
-  - preferably use the same `name` in its `[{name, value}]` return (is used as-is)
-  - prererably include the original `binary` in its return tuple.
-
-  Using a different `name` would probably be confusing.  Returning only the
-  unprocessed part of the `binary` is certainly possible, but requires the
-  returned `offset` to be set to `0` bits.
-
-  The `name` and `opts` work the same as in `fixed/2`: the `name` is used as prefix
-  in the fluid generated encode/decode functions and `opts` must have the mandatory
-  `fields` entry listing the field definitions.  All the other options of `fixed/2`
-  are also supported by `fluid/2`.
+  The `name` and `opts` work the same as in `fixed/2`: the `name` is used as
+  prefix in the fluid generated encode/decode function names and `opts` must
+  have the mandatory `fields` entry, listing the field definitions.  All the
+  other options of `fixed/2` are also supported by `fluid/2`.
 
   One additional option is supported by `fluid/2`:
 
@@ -800,9 +778,39 @@ defmodule Packeteer do
 
   Finally, `fluid/2` allows for a mixture of primitive and non-primitive field
   definitions.  Consecutive primitives are collected and turned into a private `fixed/2`
-  generated encode/decode pair.  If the last field is a primitive, the fixed
+  generated encoder/decoder pair.  If the last field is a primitive, the fixed
   encode/decode function will have a hidden `:skip__` field so the binary
   matching won't fail and remaining bits are always matched out.
+
+  ## encoder/decoder functions
+
+  The encoder/decoder functions are expected to have signatures:
+
+  ```
+  encoder(name, any) :: binary
+  decoder(name, kw, offset, binary) :: {offset, kw, binary}
+
+  # where:
+  # - kw is [{field, value}] built thusfar resp. updated with a new field upon return
+  # - name is an atom denoting the field being encoded/decoded
+  # - offset is a non_negative_integer
+  ```
+
+  In addition to the `offset` and `bin` being decoded, the decoder also receives
+  the `name` of the field to be decoded as well as the list `[{field, value}]`
+  of decoded fields thusfar.  Hence, the decoder could take different actions based on
+  those.
+
+  Note that the return value of the decoder:
+  - must specify the new offset in _bits_, not bytes (!)
+  - return an updated keyword list, e.g. using `kw ++ [{name, value}]`
+  - return the binary (or remainder, with offset=0) for subsequent decoding
+
+  Appending the new field maintains the order of the decoded fields in the
+  resulting keyword list.  `Keyword.put/3` would put the new field in front of
+  what was decoded earlier and remove duplicates (if any). Returning only the
+  unprocessed part of the `binary` is certainly possible, but requires the
+  returned `offset` to be set to `0` bits.
 
   > ### Warning {: .warning}
   >
@@ -819,11 +827,10 @@ defmodule Packeteer do
   with a SOA record. So, with one helper encoder/decoder, you could do something
   like this:
 
-      iex> mod = \"""
-      ...> defmodule RR do
+      iex> defmodule RR do
       ...>   import Packeteer
       ...>
-      ...>   fluid("",
+      ...>   fluid("rdata_",
       ...>     pattern: :soa,
       ...>     fields: [
       ...>       mname: {&name_enc/2, &name_dec/4},
@@ -845,40 +852,39 @@ defmodule Packeteer do
       ...>     ]
       ...>   )
       ...>
+      ...>   # custom encoder/decoder
       ...>   def name_enc(_name, str) do
       ...>     str
       ...>     |> String.replace("@", ".", global: false)
       ...>     |> String.split(".")
-      ...>     |> Enum.map(fn l -> <<byte_size(l)::8, l::binary>> end)
+      ...>     |> Enum.map(fn label -> <<byte_size(label)::8, label::binary>> end)
       ...>     |> Enum.join()
       ...>     |> Kernel.<>(<<0>>)
       ...>   end
       ...>
       ...>   def name_dec(name, kw, offset, bin) do
-      ...>     {offset, dname} = name_decp(offset, bin, [])
+      ...>     {offset, dname} = do_name_dec(offset, bin, [])
       ...>     dname =
       ...>       if name == :rname,
       ...>         do: String.replace(dname, ".", "@", global: false),
       ...>         else: dname
       ...>
-      ...>     # appending maintains field order (put would not & replace all duplicates as well)
+      ...>     # maintain field order
       ...>     {offset, kw ++ [{name, dname}], bin}
       ...>   end
       ...>
-      ...>   defp name_decp(offset, bin, acc) do
+      ...>   defp do_name_dec(offset, bin, acc) do
       ...>     <<_::bits-size(offset), len::8, label::binary-size(len), _::bits>> = bin
       ...>     offset = offset + 8 * (1 + len)
       ...>
       ...>     case len do
       ...>       0 -> {offset, Enum.reverse(acc) |> Enum.join(".")}
-      ...>       _ -> name_decp(offset, bin, [label | acc])
+      ...>       _ -> do_name_dec(offset, bin, [label | acc])
       ...>     end
       ...>   end
       ...> end
-      ...> \"""
-      iex> [{rr, _}] = Code.compile_string(mod)
-      iex> bin = rr.encode(:soa, [])  #=> <<2, 110, 115, 5, 105, 99, 97, ...>>
-      iex> {offset, kw, _bin} = rr.decode(:soa, 0, bin)
+      iex> bin = RR.rdata_encode(:soa, [])  #=> <<2, 110, 115, 5, 105, 99, 97, ...>>
+      iex> {offset, kw, _bin} = RR.rdata_decode(:soa, 0, bin)
       iex> offset
       424
       iex> kw
