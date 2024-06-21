@@ -94,5 +94,17 @@ defmodule PacketeerTest do
 
       {:error, _reason} = P.binary_encode(a: "---")
     end
+
+    test "bytes" do
+      alias Primitives, as: P
+      assert "01234567" = P.bytes_encode([])
+      assert "76543210" = P.bytes_encode(a: "76543210")
+      # bytes encoder only takes what it needs, no complaintss
+      assert "76543210" = P.bytes_encode(a: "76543210---")
+      assert {64, [a: "76543210"], "76543210"} = P.bytes_decode(0, "76543210")
+      assert {64, [a: "76543210"], "76543210---"} = P.bytes_decode(0, "76543210---")
+
+      {:error, _reason} = P.bytes_encode(a: "---")
+    end
   end
 end
