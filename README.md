@@ -92,8 +92,9 @@ Question.decode/2
 ```
 
 The custom `name_enc/2` encoder from `Helper`  would receive the field name
-(`:name`) and the value to encode.  Including the name in the call makes it
-possible for a custom encoder to act differently for different field names.
+(here it is the atom `:name`) and the value to encode.  Including the field
+name in the call makes it possible for a custom encoder to act differently for
+different field names.
 
 The custom `name_dec/4` decoder from `Helper` would receive the field name
 (:name), the keyword list decoded thus far (here that would be `[]` since its
@@ -115,24 +116,20 @@ support a number of options, amongst wich:
 
 See [`fixed/2`](`Packeteer.fixed/2`) for more information.
 
+
 ## related work
-This is yet another library to aid in the development of custom binary
-encoder/decoders.  Other work on this front include:
+
+If `Packeteer` is not for you, have a look at:
 
 - [bitcraft](https://hexdocs.pm/bitcraft/Bitcraft.html) - A toolkit for
   encoding/decoding bit strings and DSL for binary protocols bit blocks.
-
 - [bifrost](https://hexdocs.pm/bifrost/Bifrost.html) - Provides functions to
   create composable and bidirectional serializers.
-
 - [bin_format](https://hexdocs.pm/bin_format/extra-api-reference.html) -
   Generates the Elixir code for handling binary formats through structs.
-
-- [codec](https://hexdocs.pm/codec/api-reference.html) - Facilitate the
+- [codec](https://hexdocs.pm/codec/api-reference.html) - Facilitates
   development of layered binary protocols while mostly sticking with the Elixir
   bit field syntax.
-
-So why Packeteer?  Why not?
 
 ## Installation
 
