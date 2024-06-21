@@ -9,6 +9,8 @@ defmodule PacketeerTest do
     fixed("float16_", fields: [a: float(16)], defaults: [a: 42.5])
     fixed("float32_", fields: [a: float(32)], defaults: [a: 42.5])
     fixed("float64_", fields: [a: float(64)], defaults: [a: 42.5])
+    fixed("binary_", fields: [a: binary(8)], defaults: [a: "01234567"])
+    fixed("bytes_", fields: [a: bytes(8)], defaults: [a: "01234567"])
   end
 
   describe "fixed primitives" do
@@ -79,6 +81,18 @@ defmodule PacketeerTest do
 
       assert {64, [a: -42.5], <<192, 69, 64, 0, 0, 0, 0, 0>>} ==
                P.float64_decode(0, <<192, 69, 64, 0, 0, 0, 0, 0>>)
+    end
+
+    test "binary" do
+      alias Primitives, as: P
+      assert "01234567" = P.binary_encode([])
+      assert "76543210" = P.binary_encode(a: "76543210")
+      # binary encoder only takes what it needs, no complaintss
+      assert "76543210" = P.binary_encode(a: "76543210---")
+      assert {64, [a: "76543210"], "76543210"} = P.binary_decode(0, "76543210")
+      assert {64, [a: "76543210"], "76543210---"} = P.binary_decode(0, "76543210---")
+
+      {:error, _reason} = P.binary_encode(a: "---")
     end
   end
 end
