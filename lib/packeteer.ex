@@ -813,7 +813,7 @@ defmodule Packeteer do
 
   Suppose domain name compression was not a thing and you're defining a module
   `RR` that decodes the rdata section of different resource records, starting
-  with a SOA RR. So, with two helper encoder/decoder's, you could do something
+  with a SOA RR. So, with one helper encoder/decoder's, you could do something
   like this:
 
       iex> mod = \"""
