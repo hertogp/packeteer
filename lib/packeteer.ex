@@ -500,7 +500,7 @@ defmodule Packeteer do
   > If the last field in the list of definitions does not match the remaining
   > bits of any given binary, a hidden field `:skip__` is added to the
   > expression to ensure matching won't fail.  It is removed from the resulting
-  > `kw` prior to being handed to the `:after_decoding` function (if any).
+  > keyword list prior to being handed to the `:after_decoding` function (if any).
   > Upon encoding it encodes an empty string so it won't add any bits to
   > the encoded binary.  Hidden also means it won't show up in the docstrings.
 
@@ -557,9 +557,9 @@ defmodule Packeteer do
 
   ## Example
 
-  A contrived, but simple, example would be to decode an unsigned integer whose
-  width is specified by a preceding byte as a multiple of 4 bits, followed by
-  a binary of 5 bytes.
+  A simple example would be to decode an unsigned integer whose width is
+  specified by a preceding byte as a multiple of 4 bits, followed by a binary
+  of 5 bytes.
 
       iex> mod = \"""
       ...> defmodule M do
@@ -582,8 +582,8 @@ defmodule Packeteer do
       <<4, 255, 255, "stuff", "more stuff">>
       iex> m.decode(0, bin)
       {64, [len: 4, val: 65535, str: "stuff"], <<4, 255, 255, "stuff", "more stuff">>}
-      iex> <<_::bits-size(64), more::binary>> = bin
-      iex> more
+      iex> <<_::bits-size(64), todo::binary>> = bin
+      iex> todo
       "more stuff"
 
   """
