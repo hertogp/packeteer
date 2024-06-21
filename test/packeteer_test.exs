@@ -13,6 +13,7 @@ defmodule PacketeerTest do
     fixed("bytes_", fields: [a: bytes(8)], defaults: [a: "01234567"])
     fixed("bits_", fields: [a: bits(16)], defaults: [a: "42"])
     fixed("bitstring_", fields: [a: bitstring(16)], defaults: [a: "42"])
+    fixed("utf8_", fields: [a: utf8()], defaults: [a: 8364])
   end
 
   describe "fixed primitives" do
@@ -132,6 +133,12 @@ defmodule PacketeerTest do
       assert {16, [a: "99"], "99---"} = P.bitstring_decode(0, "99---")
       assert {40, [a: "99"], "---99"} = P.bitstring_decode(24, "---99")
       assert {40, [a: "99"], "---99---"} = P.bitstring_decode(24, "---99---")
+    end
+
+    test "utf8" do
+      alias Primitives, as: P
+      assert <<226, 130, 172>> == P.utf8_encode([])
+      assert "€" == P.utf8_encode([])
     end
   end
 end

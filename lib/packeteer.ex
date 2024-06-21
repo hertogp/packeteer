@@ -124,7 +124,8 @@ defmodule Packeteer do
 
   Utf8 codepoints are encoded in (or decoded from) 1..4 bytes. The bitsyntax
   only supports an endianness modifier, so this can encode or decode only 1 utf
-  codepoint at a time.
+  codepoint at a time.  Be sure to use codepoints as values for any defaults,
+  not the utf encoded string.  So, e.g. use `c: 8364`, not `c: "€"`.
 
   The default for `endian` is `:big`, pass in either `:little` or `native`
   as appropriate.
@@ -132,7 +133,7 @@ defmodule Packeteer do
   """
   @doc section: :fragment
   def utf8(endian \\ :big),
-    do: quote(do: utf8 - unquote(endian))
+    do: quote(do: utf8 - unquote(var(endian)))
 
   @doc """
   Returns a quoted fragment for a utf16 codepoint.
@@ -147,7 +148,7 @@ defmodule Packeteer do
   """
   @doc section: :fragment
   def utf16(endian \\ :big),
-    do: quote(do: utf16 - unquote(endian))
+    do: quote(do: utf16 - unquote(var(endian)))
 
   @doc """
   Returns a quoted fragment for a utf32 codepoint.
@@ -163,7 +164,7 @@ defmodule Packeteer do
   """
   @doc section: :fragment
   def utf32(endian \\ :big),
-    do: quote(do: utf32 - unquote(endian))
+    do: quote(do: utf32 - unquote(var(endian)))
 
   # [[ HELPERS ]]
 
