@@ -86,6 +86,7 @@ defmodule PacketeerTest do
     end
 
     test "binary" do
+      # binary is shorthand for bytes
       alias Primitives, as: P
       assert "01234567" == P.binary_encode([])
       assert "76543210" == P.binary_encode(a: "76543210")
@@ -111,6 +112,7 @@ defmodule PacketeerTest do
     end
 
     test "bits" do
+      # bits is shorthand for bitstring
       alias Primitives, as: P
       assert "42" == P.bits_encode([])
       assert "24" == P.bits_encode(a: "24")
@@ -119,6 +121,17 @@ defmodule PacketeerTest do
       assert {16, [a: "99"], "99---"} = P.bits_decode(0, "99---")
       assert {40, [a: "99"], "---99"} = P.bits_decode(24, "---99")
       assert {40, [a: "99"], "---99---"} = P.bits_decode(24, "---99---")
+    end
+
+    test "bitstring" do
+      alias Primitives, as: P
+      assert "42" == P.bitstring_encode([])
+      assert "24" == P.bitstring_encode(a: "24")
+      # bitstring takes what it needs
+      assert "24" == P.bitstring_encode(a: "24--")
+      assert {16, [a: "99"], "99---"} = P.bitstring_decode(0, "99---")
+      assert {40, [a: "99"], "---99"} = P.bitstring_decode(24, "---99")
+      assert {40, [a: "99"], "---99---"} = P.bitstring_decode(24, "---99---")
     end
   end
 end
