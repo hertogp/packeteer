@@ -5,6 +5,7 @@ defmodule Packeteer do
   """
 
   @primitives [:uint, :sint, :float, :bytes, :binary, :bits, :bitstring, :utf8, :utf16, :utf32]
+  @endianness [:big, :little, :native]
 
   # [[ PRIMITIVES ]]
 
@@ -22,7 +23,7 @@ defmodule Packeteer do
 
   """
   @doc section: :fragment
-  def uint(size, endian \\ :big) do
+  def uint(size, endian \\ :big) when endian in @endianness do
     endian = var(endian)
     size = var(size)
     quote(do: integer - size(unquote(size)) - unquote(endian))
@@ -42,7 +43,7 @@ defmodule Packeteer do
 
   """
   @doc section: :fragment
-  def sint(size, endian \\ :big) do
+  def sint(size, endian \\ :big) when endian in @endianness do
     endian = var(endian)
     size = var(size)
     quote(do: integer - size(unquote(size)) - unquote(endian) - signed)
@@ -61,7 +62,7 @@ defmodule Packeteer do
 
   """
   @doc section: :fragment
-  def float(size, endian \\ :big) do
+  def float(size, endian \\ :big) when endian in @endianness do
     endian = var(endian)
     size = var(size)
     quote(do: float - size(unquote(size)) - unquote(endian))
@@ -132,7 +133,7 @@ defmodule Packeteer do
 
   """
   @doc section: :fragment
-  def utf8(endian \\ :big),
+  def utf8(endian \\ :big) when endian in @endianness,
     do: quote(do: utf8 - unquote(var(endian)))
 
   @doc """
@@ -147,7 +148,7 @@ defmodule Packeteer do
 
   """
   @doc section: :fragment
-  def utf16(endian \\ :big),
+  def utf16(endian \\ :big) when endian in @endianness,
     do: quote(do: utf16 - unquote(var(endian)))
 
   @doc """
@@ -163,7 +164,7 @@ defmodule Packeteer do
 
   """
   @doc section: :fragment
-  def utf32(endian \\ :big),
+  def utf32(endian \\ :big) when endian in @endianness,
     do: quote(do: utf32 - unquote(var(endian)))
 
   # [[ HELPERS ]]
@@ -208,7 +209,7 @@ defmodule Packeteer do
   end
 
   defp fragments(fields) do
-    non_p = Enum.filter(fields, fn field -> f_type(field) != :p end)
+    non_p = Enum.filter(fields, fn field -> ftype(field) != :p end)
 
     if non_p != [] do
       msg = Enum.map(non_p, fn {field, _gf} -> "'#{field}'" end) |> Enum.join(", ")
@@ -240,6 +241,13 @@ defmodule Packeteer do
 
   # [[ DOC STRINGS ]]
 
+  defp plural(n) do
+    # pesky plurals
+    if n == 1,
+      do: "",
+      else: "s"
+  end
+
   defp pretty_fields(fields) do
     # fields is keyword list of field names and an ast for their function call.
     # So doing Macro.to_string and inserting some new lines to make it
@@ -257,8 +265,9 @@ defmodule Packeteer do
     else
       # don't want the hidden field to show up (if present)
       fields = Keyword.delete(opts[:fields] || [], :skip__)
+      nf = length(fields)
       values = Keyword.delete(opts[:values] || [], :skip__)
-      fixed? = Enum.all?(fields, fn f -> f_type(f) == :p end)
+      fixed? = Enum.all?(fields, fn f -> ftype(f) == :p end)
 
       codec =
         if fixed?,
@@ -266,13 +275,13 @@ defmodule Packeteer do
           else: nil
 
       """
-      Encodes #{length(fields)} named fields from given `kw` keyword list to a binary
-      as per field definitions below.
+      Encodes #{nf} named field#{plural(nf)} from given `kw` keyword list to a binary
+      as per field definition#{plural(nf)} below.
 
       Fields are encoded in the order listed in the field definition.  All _named_ fields
       must be present in `kw`-list, unless they have a defined default value.
 
-      Field definitions:
+      Field definition#{plural(nf)}:
       ```
       #{pretty_fields(fields)}
       ```
@@ -308,7 +317,8 @@ defmodule Packeteer do
     else
       # don't want the hidden field to show up
       fields = Keyword.delete(opts[:fields] || [], :skip__)
-      fixed? = Enum.all?(fields, fn f -> f_type(f) == :p end)
+      fixed? = Enum.all?(fields, fn f -> ftype(f) == :p end)
+      nf = length(fields)
 
       codec =
         if fixed?,
@@ -316,10 +326,10 @@ defmodule Packeteer do
           else: nil
 
       """
-      Decodes #{length(fields)} named fields from given `bin` binary, starting at `offset`,
-      returns `{new_offset, Keyword.t, binary}`.
+      Decodes #{nf} named field#{plural(nf)} from given `bin` binary,
+      starting at `offset`, returns `{new_offset, Keyword.t, binary}`.
 
-      Field definitions:
+      Field definition#{plural(nf)}:
       ```
       #{pretty_fields(fields)}
       ```
@@ -336,6 +346,116 @@ defmodule Packeteer do
       end}
       """
     end
+  end
+
+  # [[ CHECKS ]]
+
+  defp ftype({_fieldname, v}) do
+    # check type of value for a given field
+    # - :p means it is a primitive
+    # - :f means a user supplied function
+    if elem(v, 0) in @primitives, do: :p, else: :f
+  end
+
+  defp get_size([size | _]) when is_integer(size), do: size
+  defp get_size(_), do: nil
+
+  # check primitive definitions -> nil | error string
+  defp check_pdef!(pos, max, type, [])
+       when pos == max and type in [:bits, :bitstring, :bytes, :binary] do
+    # last field of this type may omit its size
+    nil
+  end
+
+  defp check_pdef!(pos, _max, type, size)
+       when not is_integer(size) and type in [:uint, :sint, :bits, :bitstring, :bytes, :binary] do
+    # [ ] check if its an expression referencing earlier fields
+    "field #{pos}, #{type} requires a pos_integer size, got: #{inspect(size)}"
+  end
+
+  defp check_pdef!(pos, _max, :float, size) when size not in [16, 32, 64] do
+    "field #{pos}, float valid sizes are: [16, 32, 64], got: #{inspect(size)}"
+  end
+
+  defp check_pdef!(_pos, _max, type, _size) when type in [:utf8, :utf16, :utf32] do
+    nil
+  end
+
+  # all good
+  defp check_pdef!(_pos, _max, _type, _size),
+    do: nil
+
+  defp check!(:fdef, fields, file, line) do
+    # check field definitions (as far as feasible)
+    {pdefs, fdefs} = Enum.split_with(fields, fn fld -> ftype(fld) == :p end)
+    IO.inspect(fdefs, label: :custom_codecs)
+
+    pdefs = Enum.with_index(pdefs)
+    max = length(pdefs) - 1
+
+    error =
+      for {{fname, fdef}, pos} <- pdefs do
+        if fdef == nil do
+          "#{fname} has no definition"
+        else
+          {type, _, args} = fdef
+          size = get_size(args)
+          check_pdef!(pos, max, type, size)
+        end
+      end
+      |> Enum.filter(fn k -> k end)
+      |> Enum.join(", ")
+
+    if error != "" do
+      error = "definition error: " <> error
+      raise CompileError, file: file, line: line, description: error
+    end
+  end
+
+  defp check!(:dups, kv, file, line) do
+    # no duplicates allowed in kv
+    error =
+      kv
+      |> Enum.frequencies_by(fn {k, _} -> k end)
+      |> Enum.filter(fn {_, v} -> v > 1 end)
+      |> Enum.map(fn {k, _} -> "#{k}" end)
+      |> Enum.join(", ")
+
+    if error != "" do
+      error = "duplicate field names: "
+      raise CompileError, file: file, line: line, description: error
+    end
+  end
+
+  defp check!(:miss, fields, values, file, line) do
+    # check for missing field definitions mentioned in defaults
+    error =
+      for {k, _} <- values do
+        if fields[k], do: nil, else: "#{inspect(k)}"
+      end
+      |> Enum.filter(fn v -> v end)
+      |> Enum.uniq()
+      |> Enum.join(", ")
+
+    if error != "" do
+      error = "defaults without field definition: " <> error
+      raise CompileError, file: file, line: line, description: error
+    end
+  end
+
+  defp check!(opts, file, line) do
+    # check for:
+    # - duplicate field names in fields & defaults
+    # - names in default that are not in fields
+    # - default values for primitives that don't match their spec
+    fields = opts[:fields]
+    values = opts[:defaults] || []
+
+    check!(:dups, fields, file, line)
+    check!(:dups, values, file, line)
+    check!(:miss, fields, values, file, line)
+    check!(:fdef, fields, file, line)
+    # check!(:vals, fields, values, file, line)
   end
 
   # [[ FIXED GENERATOR ]]
@@ -588,17 +708,12 @@ defmodule Packeteer do
       "more stuff"
 
   """
-  defmacro fixed(name, opts),
-    do: fixed_ast(name, opts)
-
-  # [[ mixed GENERATOR ]]
-
-  defp f_type({_fieldname, v}) do
-    # check type of value for a given field
-    # - :p means it is a primitive
-    # - :f means a user supplied function
-    if elem(v, 0) in @primitives, do: :p, else: :f
+  defmacro fixed(name, opts) do
+    check!(opts, __CALLER__.file, __CALLER__.line)
+    fixed_ast(name, opts)
   end
+
+  # [[ MIXED GENERATOR ]]
 
   # group fields by type in order to turn consecutive primitives into a single
   # private expression using bit syntax (i.e. a single fixed encoder/decoder)
@@ -609,7 +724,7 @@ defmodule Packeteer do
     # this is where consolidation starts, only used by `mixed_ast`
     annotated_fields =
       for field <- fields do
-        {f_type(field), field}
+        {ftype(field), field}
       end
       |> Enum.chunk_by(fn t -> elem(t, 0) end)
 
@@ -668,6 +783,8 @@ defmodule Packeteer do
     opts = generic_defaults(opts)
     fields = opts[:fields]
     values = opts[:defaults]
+    IO.inspect(fields, label: :fields)
+    IO.inspect(values, label: :values)
 
     encode_fun = String.to_atom("#{name}encode")
     encode_args = maybe_pattern(:encode, opts)
