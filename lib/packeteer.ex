@@ -26,7 +26,7 @@ defmodule Packeteer do
   def uint(size, endian \\ :big) when endian in @endianness do
     endian = var(endian)
     size = var(size)
-    quote(do: integer - size(unquote(size)) - unquote(endian))
+    quote do: integer - size(unquote(size)) - unquote(endian)
   end
 
   @doc """
@@ -46,7 +46,7 @@ defmodule Packeteer do
   def sint(size, endian \\ :big) when endian in @endianness do
     endian = var(endian)
     size = var(size)
-    quote(do: integer - size(unquote(size)) - unquote(endian) - signed)
+    quote do: integer - size(unquote(size)) - unquote(endian) - signed
   end
 
   @doc """
@@ -65,7 +65,7 @@ defmodule Packeteer do
   def float(size, endian \\ :big) when endian in @endianness do
     endian = var(endian)
     size = var(size)
-    quote(do: float - size(unquote(size)) - unquote(endian))
+    quote do: float - size(unquote(size)) - unquote(endian)
   end
 
   @doc """
@@ -74,9 +74,11 @@ defmodule Packeteer do
   """
   @doc section: :fragment
   def bytes(size \\ nil) do
-    if size,
-      do: quote(do: bytes - size(unquote(var(size)))),
-      else: quote(do: bytes)
+    if size do
+      quote do: bytes - size(unquote(var(size)))
+    else
+      quote do: bytes
+    end
   end
 
   @doc """
@@ -91,8 +93,9 @@ defmodule Packeteer do
 
   """
   @doc section: :fragment
-  def binary(size \\ nil),
-    do: bytes(size)
+  def binary(size \\ nil) do
+    bytes(size)
+  end
 
   @doc """
   Shorthand for `bitstring/1`.
@@ -100,9 +103,11 @@ defmodule Packeteer do
   """
   @doc section: :fragment
   def bits(size \\ nil) do
-    if size,
-      do: quote(do: bits - size(unquote(var(size)))),
-      else: quote(do: bits)
+    if size do
+      quote do: bits - size(unquote(var(size)))
+    else
+      quote do: bits
+    end
   end
 
   @doc """
@@ -117,24 +122,23 @@ defmodule Packeteer do
 
   """
   @doc section: :fragment
-  def bitstring(size \\ nil),
-    do: bits(size)
+  def bitstring(size \\ nil) do
+    bits(size)
+  end
 
   @doc """
   Returns the quoted rhs for a utf8 segment.
 
-  Utf8 codepoints are encoded in (or decoded from) 1..4 bytes. The bitsyntax
-  only supports an endianness modifier, so this can encode or decode only 1 utf
-  codepoint at a time.  Be sure to use codepoints as values for any defaults,
-  not the utf encoded string.  So, e.g. use `c: 8364`, not `c: "€"`.
-
-  The default for `endian` is `:big`, pass in either `:little` or `native`
-  as appropriate.
+  Utf8 codepoints are encoded in (or decoded from) 1..4 bytes.
+  This can encode or decode only 1 utf codepoint at a time.  Be sure to use
+  codepoints as values for any defaults, not the utf encoded string.  So, e.g.
+  use `c: 8364`, not `c: "€"`.
 
   """
   @doc section: :fragment
-  def utf8(endian \\ :big) when endian in @endianness,
-    do: quote(do: utf8 - unquote(var(endian)))
+  def utf8() do
+    quote do: utf8
+  end
 
   @doc """
   Returns the quoted rhs for a utf16 segment.
@@ -148,8 +152,9 @@ defmodule Packeteer do
 
   """
   @doc section: :fragment
-  def utf16(endian \\ :big) when endian in @endianness,
-    do: quote(do: utf16 - unquote(var(endian)))
+  def utf16(endian \\ :big) when endian in @endianness do
+    quote do: utf16 - unquote(var(endian))
+  end
 
   @doc """
   Returns the quoted rhs for a utf32 segment.
@@ -164,8 +169,9 @@ defmodule Packeteer do
 
   """
   @doc section: :fragment
-  def utf32(endian \\ :big) when endian in @endianness,
-    do: quote(do: utf32 - unquote(var(endian)))
+  def utf32(endian \\ :big) when endian in @endianness do
+    quote do: utf32 - unquote(var(endian))
+  end
 
   # [[ HELPERS ]]
 
@@ -177,6 +183,7 @@ defmodule Packeteer do
 
   defp generic_defaults(opts) do
     # join only used by mixed/2 encoder
+    # [ ] use @defaults and simply do kw = Keyword.merge(@default, kw)
     opts
     |> Keyword.put_new(:docstr, true)
     |> Keyword.put_new(:silent, true)
@@ -350,40 +357,48 @@ defmodule Packeteer do
 
   # [[ CHECKS ]]
 
+  # is field :p(rimitive) or a :f(unction)
   defp ftype({_fieldname, v}) do
-    # check type of value for a given field
-    # - :p means it is a primitive
-    # - :f means a user supplied function
     if elem(v, 0) in @primitives, do: :p, else: :f
   end
 
-  defp get_size([size | _]) when is_integer(size), do: size
-  defp get_size(_), do: nil
+  defp get_size([size | _]) when is_integer(size) do
+    size
+  end
+
+  # size is an expression, get the field names used (atoms)
+  defp get_size(ast) do
+    Enum.filter(Macro.prewalker(ast), fn x ->
+      IO.inspect(x, label: :prewalker)
+      is_atom(x)
+    end)
+  end
 
   # check primitive definitions -> nil | error string
-  defp check_pdef!(pos, max, type, [])
+  defp check_pdef(pos, max, type, [])
        when pos == max and type in [:bits, :bitstring, :bytes, :binary] do
     # last field of this type may omit its size
     nil
   end
 
-  defp check_pdef!(pos, _max, type, size)
+  defp check_pdef(pos, _max, type, size)
        when not is_integer(size) and type in [:uint, :sint, :bits, :bitstring, :bytes, :binary] do
     # [ ] check if its an expression referencing earlier fields
     "field #{pos}, #{type} requires a pos_integer size, got: #{inspect(size)}"
   end
 
-  defp check_pdef!(pos, _max, :float, size) when size not in [16, 32, 64] do
+  defp check_pdef(pos, _max, :float, size) when size not in [16, 32, 64] do
     "field #{pos}, float valid sizes are: [16, 32, 64], got: #{inspect(size)}"
   end
 
-  defp check_pdef!(_pos, _max, type, _size) when type in [:utf8, :utf16, :utf32] do
+  defp check_pdef(_pos, _max, type, _size) when type in [:utf8, :utf16, :utf32] do
     nil
   end
 
   # all good
-  defp check_pdef!(_pos, _max, _type, _size),
-    do: nil
+  defp check_pdef(_pos, _max, _type, _size) do
+    nil
+  end
 
   defp check!(:fdef, fields, file, line) do
     # check field definitions (as far as feasible)
@@ -399,8 +414,27 @@ defmodule Packeteer do
           "#{fname} has no definition"
         else
           {type, _, args} = fdef
-          size = get_size(args)
-          check_pdef!(pos, max, type, size)
+
+          IO.inspect(fdef, label: :fdef)
+
+          case get_size(args) do
+            size when is_integer(size) ->
+              check_pdef(pos, max, type, size)
+
+            fnames when is_list(fnames) ->
+              non_uint =
+                Enum.map(fnames, fn fld -> {fld, elem(fields[fld], 0)} end)
+                |> Enum.filter(fn {_, t} -> t != :uint end)
+                |> Enum.map(fn {fld, type} -> "#{fld}: is a #{type}" end)
+                |> Enum.join(", ")
+
+              if non_uint != "" do
+                fdef = Macro.to_string(fdef)
+                "field #{fname}: #{inspect(fdef)}, #{non_uint}"
+              else
+                nil
+              end
+          end
         end
       end
       |> Enum.filter(fn k -> k end)
@@ -451,6 +485,10 @@ defmodule Packeteer do
     fields = opts[:fields]
     values = opts[:defaults] || []
 
+    # fields: [:x, a: 1, b: 2] is not caught by dialixer/compiler
+    # [ ] check for non-empty keyword list
+    # check!(:iskw, fields, file, line)
+    # check!(:iskw, values, file, line)
     check!(:dups, fields, file, line)
     check!(:dups, values, file, line)
     check!(:miss, fields, values, file, line)
