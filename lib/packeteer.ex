@@ -838,36 +838,38 @@ defmodule Packeteer do
   used).  They match the following typespecs (assuming `:name` is "my_"):
 
   ```elixir
-  @spec my_encode(kw) :: binary | {:error, reason}
+  @spec my_encode(Keyword.t) :: binary | {:error, binary}
 
   # or
 
-  @spec my_encode(literal, kw) :: binary | {error, reason}
+  @spec my_encode(literal, Keyword.t) :: binary | {error, binary}
 
   # where:
-  # - kw is a keyword list of fields and values to be encoded
-  # - literal as specified by `:pattern`, e.g. `:soa` or %{type: 1} etc.
+  # - Keyword.t is the list of fields and values to be encoded
+  # - literal as specified by `:pattern`, e.g. `:soa` or %{type: 6} etc.
   ```
 
-  Use the `:pattern` option to specify a literal
+  Use the `:pattern` option to specify a
   [literal](https://hexdocs.pm/elixir/typespecs.html#literals) that should
   be included as the first argument in the encode/decode function definitions.
   information.
 
   ## The decode function
-  `pack/1` defines an encode function as follows:
-  - `\#{name}decode/3`, or
-  - `\#{name}decode/4`  if `:pattern` is used.
 
-  whose signatures (assuming name is "name_") are:
-  ```
-  name_encode(kw) :: binary | {:error, reason}
-  name_decode(offset, binary, kw) :: {offset, kw, binary} | {:error, reason}
+  `pack/1` defines a decode function with arity of 2 or 3 (if `:pattern` is
+  used).  They match the typespecs (assuming `:name` is "my_"):
+
+  ```elixir
+  @spec name_decode(offset, binary) :: {offset, Keyword.t, binary} | {:error, reason}
+
+  # or
+
+  @spec name_decode(literal, offset, binary) :: {offset, Keyword.t, binary} | {:error, reason}
 
   # where:
-  # - kw is a keyword list of fields and values
+  # - Keyword.t is a list of {field,value}-pairs that were decoded
   # - offset is a non_negative_integer
-  # - reason is a, hopefully, informative binary
+  # - literal as specified by `:pattern`, e.g. `:soa` or %{type: 6} etc.
   ```
 
   Use the `:pattern` option to specify a literal
