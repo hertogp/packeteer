@@ -793,7 +793,8 @@ defmodule Packeteer do
   context.
 
   The specification is a keyword list with at least a `:fields` entry
-  which contains one or more field definitions to be encoded, resp. decoded.
+  which contains one or more definitions for fields to be encoded, resp.
+  decoded.
 
   The `:fields` list contains {`:name`, `definition`}-pairs where definition
   is either:
@@ -801,7 +802,6 @@ defmodule Packeteer do
   - a pair of captured custom {`&my_encode/3`, `&my_decode/5`} functions.
 
   Optional parts of the `specification` include:
-
   - `:name`, a binary (default ""), used as prefix for the function name of
   the encode/decode functions.
 
@@ -829,10 +829,10 @@ defmodule Packeteer do
   - `:pattern`, if present, must be a literal that will be included in the
   signature of the encode/decode functions as their first argument.  Used
   when generating multiple encoder/decoder functions with the same name and
-  which use pattern matching to select the right pair. There is no default.
+  which use pattern matching to select the right pair.
 
-  - `:silent`, if true, prints the defined functions to the console during
-  compilation.  The default is `false`.
+  - `:silent`, if `false`, prints the defined functions to the console during
+  compilation.  The default is `true`.
 
   ## The encode function
 
