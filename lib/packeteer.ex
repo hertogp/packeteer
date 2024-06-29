@@ -1,6 +1,6 @@
 defmodule Packeteer do
   @moduledoc """
-  A helper module to make encoding and decoding bitstrings easier.
+  A helper libary to make encoding and decoding bitstrings easier.
 
   """
 
@@ -607,8 +607,8 @@ defmodule Packeteer do
         @doc unquote(encode_doc)
         def unquote(encode_fun)(unquote_splicing(encode_args)) when is_list(kw) do
           try do
-            unquote(before_encode)
             kw = Keyword.merge(unquote(values), kw)
+            unquote(before_encode)
             unquote(maybe_skip)
             unquote_splicing(binds)
             unquote(codec)
@@ -725,8 +725,8 @@ defmodule Packeteer do
 
         @doc unquote(encode_doc)
         def unquote(encode_fun)(unquote_splicing(encode_args)) do
-          unquote(before_encode)
           kw = Keyword.merge(unquote(values), kw)
+          unquote(before_encode)
           state = %{encoded: [], state: %{}}
 
           map =
@@ -788,7 +788,7 @@ defmodule Packeteer do
   The specification is a keyword list with at least a `:fields` entry
   which contains one or more field definitions to be encoded, resp. decoded.
 
-  The `:fields` list contains {`:field_name`, `definition`}-pairs where definition
+  The `:fields` list contains {`:name`, `definition`}-pairs where definition
   is either one of the [primitives](#primitives) or a pair of captured custom
   `my_encode/3`, `my_decode/5` functions.
 
@@ -797,7 +797,7 @@ defmodule Packeteer do
   - `:name`, a binary (default "") used as prefix when defining the encode/decode
   functions.  Any empty string would simply define `&encode/1` and `&decode/3`.
 
-  - `:defaults`, a keyword list with field_name,value-pairs (default []).  Used
+  - `:defaults`, a keyword list with {`:name`,value}-pairs (default []).  Used
   by the encode function to fill in the blanks.
 
   - `:before_encode`, if present, must be a function that takes a keyword list
@@ -829,13 +829,13 @@ defmodule Packeteer do
   ## The encode/decode functions
 
   The following encode/decode functions will be defined in the calling module:
-  - `\#{name}encode/1` and `\#{name}decode/2`, or
+  - `\#{name}encode/1` and `\#{name}decode/3`, or
   - `\#{name}encode/2` and `\#{name}decode/3`
 
   whose signatures (assuming name is "name_") are:
   ```
   name_encode(kw) :: binary | {:error, reason}
-  name_decode(offset, binary) :: {offset, kw, binary} | {:error, reason}
+  name_decode(offset, binary, kw) :: {offset, kw, binary} | {:error, reason}
 
   # where:
   # - kw is a keyword list of fields and values

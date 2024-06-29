@@ -1,9 +1,9 @@
 # Packeteer
 
-Helper library to make encoding/decoding binaries easier.
+Helper library to make encoding/decoding bitstrings easier.
 
-When a binary has a fixed layout, [`fixed/2`](`Packeteer.fixed/2`) generates
-the encode resp. decode function based on a given name and options, which must
+When a binary has a fixed layout, [`pack/1`](`Packeteer.pack/1`) generates
+the encode resp. decode function based on a given `specification`, which must
 include a list of [_primitive_](`Packeteer#primitives`) field definitions.
 
 ## Fixed fields
@@ -55,7 +55,7 @@ Since the first argument (name) is `""`, the resulting names are simply
 `encode/1` it would show the list of field definitions, their default values
 and the bitstring expression used for encoding.  For `decode/2` it would show
 basically the same, omitting the list of defaults.  See
-[`fixed/2`](`Packeteer.fixed/2`) for another example.
+[`pack/1`](`Packeteer.pack/1`) for another example.
 
 ## Mixed fields
 
@@ -70,7 +70,8 @@ defmodule Question do
   import Packeteer
   import Helper
 
-  mixed("",
+  pack([
+    name: "",
     fields: [
       name: {&name_enc/2, &name_dec/4},
       type: uint(16),
@@ -80,7 +81,7 @@ defmodule Question do
       type: 1,  # :A
       class: 1, # :IN
     ]
-  )
+  ])
 end
 ```
 
@@ -114,7 +115,7 @@ support a number of options, amongst wich:
 - `:private`, to define the encode/decode functions as private functions
 - `:silent`, to print out the defined functions during compilation (or not)
 
-See [`fixed/2`](`Packeteer.fixed/2`) for more information.
+See [`pack/1`](`Packeteer.pack/1`) for more information.
 
 
 ## related work
