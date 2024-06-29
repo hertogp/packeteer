@@ -6,6 +6,8 @@ defmodule Packeteer do
 
   @primitives [:uint, :sint, :float, :bytes, :binary, :bits, :bitstring, :utf8, :utf16, :utf32]
   @endianness [:big, :little, :native]
+  # :pattern could be nil by choice, so no default and check absence/presence
+  # rather than claiming a value as default
   @defaults [
     name: "",
     fields: [],
@@ -14,7 +16,6 @@ defmodule Packeteer do
     after_decode: nil,
     docstr: true,
     private: false,
-    # pattern: nil,
     silent: true
   ]
 
@@ -877,11 +878,9 @@ defmodule Packeteer do
   be included as the first argument in the encode/decode function definitions.
   information.
 
-  ## Field definitions
-
   > #### Info {: .info}
   > If the last field in the list of definitions does not match the remaining
-  > bits of any given binary, a hidden field `:skip__` is appended to the
+  > bits of any given bitstring, a hidden field `:skip__` is appended to the
   > expression to ensure matching won't fail.  It is removed from the resulting
   > keyword list prior to being handed to the `:after_decoding` function (if any).
   > Upon encoding it encodes an empty string so it won't add any bits to
@@ -894,8 +893,7 @@ defmodule Packeteer do
   specified by a preceding byte as a multiple of 4 bits, followed by a binary
   of 5 bytes.
 
-      iex> mod = \"""
-      ...> defmodule M do
+      iex> defmodule M do
       ...>  import Packeteer
       ...>  pack([
       ...>      name: "",
@@ -910,11 +908,9 @@ defmodule Packeteer do
       ...>     docstr: false
       ...>  ])
       ...> end
-      ...> \"""
-      iex> [{m, _}] = Code.compile_string(mod)
-      iex> bin = m.encode(len: 4, val: 65535) <> "more stuff"
+      iex> bin = M.encode(len: 4, val: 65535) <> "more stuff"
       <<4, 255, 255, "stuff", "more stuff">>
-      iex> m.decode(0, bin, %{})
+      iex> M.decode(0, bin, %{})
       {64, [len: 4, val: 65535, str: "stuff"], <<4, 255, 255, "stuff", "more stuff">>}
       iex> <<_::bits-size(64), todo::binary>> = bin
       iex> todo
