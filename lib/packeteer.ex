@@ -14,7 +14,7 @@ defmodule Packeteer do
     after_decode: nil,
     docstr: true,
     private: false,
-    pattern: nil,
+    # pattern: nil,
     silent: true
   ]
 
@@ -550,7 +550,7 @@ defmodule Packeteer do
     arg = [{:kw, [], Packeteer}]
     pat = opts[:pattern]
 
-    if pat,
+    if Keyword.has_key?(opts, :pattern),
       do: [pat | arg],
       else: arg
   end
@@ -800,7 +800,7 @@ defmodule Packeteer do
 
   Optional parts of the `specification` include:
 
-  - `:name`, a binary (default "") used as prefix for the function name of
+  - `:name`, a binary (default ""), used as prefix for the function name of
   the encode/decode functions.
 
   - `:defaults`, a keyword list with {`:name`,value}-pairs (default []).  Used
@@ -827,7 +827,7 @@ defmodule Packeteer do
   - `:pattern`, if present, must be a literal that will be included in the
   signature of the encode/decode functions as their first argument.  Used
   when generating multiple encoder/decoder functions with the same name and
-  which use pattern matching to select the right pair. The default is `nil`.
+  which use pattern matching to select the right pair. There is no default.
 
   - `:silent`, if true, prints the defined functions to the console during
   compilation.  The default is `false`.
