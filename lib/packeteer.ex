@@ -800,8 +800,8 @@ defmodule Packeteer do
 
   Optional parts of the `specification` include:
 
-  - `:name`, a binary (default "") used as prefix when defining the encode/decode
-  functions.  Any empty string would simply define `&encode/1` and `&decode/3`.
+  - `:name`, a binary (default "") used as prefix for the function name of
+  the encode/decode functions.
 
   - `:defaults`, a keyword list with {`:name`,value}-pairs (default []).  Used
   by the encode function to fill in the blanks.
