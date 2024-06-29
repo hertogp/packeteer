@@ -589,11 +589,14 @@ defmodule Packeteer do
     keys = Enum.map(fields, fn {k, _} -> k end)
     vars = Enum.map(keys, fn k -> var(k) end)
 
+    # xyz_encode(kw) or xyz_encode(pattern, kw)
     encode_fun = String.to_atom("#{name}encode")
     encode_args = maybe_pattern(:encode, opts)
     encode_doc = docstring(:encode, opts)
     before_encode = before_encode(opts[:before_encode])
 
+    # xyz_decode(offset, bin, kw) or xyz_decode(pattern, offset, bin, kw)
+    # where kw is the list of fields decoded this far.
     decode_fun = String.to_atom("#{name}decode")
     decode_args = maybe_pattern(:decode, opts)
     decode_doc = docstring(:decode, opts)
@@ -605,7 +608,7 @@ defmodule Packeteer do
     ast =
       quote do
         @doc unquote(encode_doc)
-        def unquote(encode_fun)(unquote_splicing(encode_args)) when is_list(kw) do
+        def unquote(encode_fun)(unquote_splicing(encode_args)) do
           try do
             kw = Keyword.merge(unquote(values), kw)
             unquote(before_encode)
@@ -703,11 +706,14 @@ defmodule Packeteer do
     fields = opts[:fields]
     values = opts[:defaults]
 
+    # xyz_encode(kw) or xyz_encode(pattern, kw)
     encode_fun = String.to_atom("#{name}encode")
     encode_args = maybe_pattern(:encode, opts)
     encode_doc = docstring(:encode, opts)
     before_encode = before_encode(opts[:before_encode])
 
+    # xyz_decode(offset, bin, kw) or xyz_decode(pattern, offset, bin, kw)
+    # where kw is the list of fields decoded this far.
     decode_fun = String.to_atom("#{name}decode")
     decode_args = maybe_pattern(:decode, opts)
     decode_doc = docstring(:decode, opts)
@@ -826,11 +832,32 @@ defmodule Packeteer do
   - `:silent`, if true, prints the defined functions to the console during
   compilation.  The default is `false`.
 
-  ## The encode/decode functions
+  ## The encode function
 
-  The following encode/decode functions will be defined in the calling module:
-  - `\#{name}encode/1` and `\#{name}decode/3`, or
-  - `\#{name}encode/2` and `\#{name}decode/3`
+  `pack/1` defines an encode function with arity of 1 or 2 (if `:pattern` is
+  used).  They match the following typespecs (assuming `:name` is "my_"):
+
+  ```elixir
+  @spec my_encode(kw) :: binary | {:error, reason}
+
+  # or
+
+  @spec my_encode(literal, kw) :: binary | {error, reason}
+
+  # where:
+  # - kw is a keyword list of fields and values to be encoded
+  # - literal as specified by `:pattern`, e.g. `:soa` or %{type: 1} etc.
+  ```
+
+  Use the `:pattern` option to specify a literal
+  [literal](https://hexdocs.pm/elixir/typespecs.html#literals) that should
+  be included as the first argument in the encode/decode function definitions.
+  information.
+
+  ## The decode function
+  `pack/1` defines an encode function as follows:
+  - `\#{name}decode/3`, or
+  - `\#{name}decode/4`  if `:pattern` is used.
 
   whose signatures (assuming name is "name_") are:
   ```
