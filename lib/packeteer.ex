@@ -862,16 +862,16 @@ defmodule Packeteer do
   used).  They match the typespecs (assuming `:name` is "my_"):
 
   ```elixir
-  @spec name_decode(offset, binary) :: {offset, Keyword.t, binary} | {:error, reason}
+  @spec my_decode(offset, binary) :: {offset, Keyword.t, binary} | {:error, reason}
 
   # or
 
-  @spec name_decode(literal, offset, binary) :: {offset, Keyword.t, binary} | {:error, reason}
+  @spec my_decode(literal, offset, binary) :: {offset, Keyword.t, binary} | {:error, reason}
 
   # where:
   # - Keyword.t is a list of {field,value}-pairs that were decoded
   # - offset is a non_negative_integer where this decoder left off
-  # - literal as specified by `:pattern`, e.g. `:soa` or %{type: 6} etc.
+  # - literal as specified by `:pattern`, e.g. :soa or %{type: 6} etc.
   ```
 
   Use the `:pattern` option to specify a
