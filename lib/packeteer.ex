@@ -310,7 +310,7 @@ defmodule Packeteer do
         ```
         """
       else
-        "The encoder is produced by `mixed2`."
+        "The encoder is produced by `pack/1`."
       end}
 
       #{if values == [] do
@@ -358,7 +358,7 @@ defmodule Packeteer do
         ```
         """
       else
-        "The encoder is produced by `mixed2`."
+        "The encoder is produced by `pack/1`."
       end}
       """
     end
@@ -700,8 +700,6 @@ defmodule Packeteer do
   end
 
   defp mixed_ast(name, opts) do
-    # returns the ast for the mixed macro to use
-    # opts = generic_defaults(opts)
     fields = opts[:fields]
     values = opts[:defaults]
 
