@@ -1017,7 +1017,6 @@ defmodule Packeteer do
       ...>         do: String.replace(dname, ".", "@", global: false),
       ...>         else: dname
       ...>
-      ...>     # maintain field order
       ...>     {offset, dname, bin, state}
       ...>   end
       ...>
