@@ -955,7 +955,7 @@ defmodule Packeteer do
   keyword list of {field,values}-pairs decoded thusfar, the offset where decoding
   should commence, the bitstring being decoded and a state in the form of a map.
   It must return `{offset, term, bitstring, map}`-tuple.  Where offset is where
-  the next decoder should start, the term will be places as the value for this
+  the next decoder should start, the term will be placed as the value for this
   field in the resulting keyword list, bitstring may be the leftover bits (in
   which case offset should be set to `0`) and map is the, possibly updated, state.
   Note that subsequent decoders will receive the offset, bitstring and map as
