@@ -1,13 +1,25 @@
 defmodule Packeteer do
   @moduledoc """
-  Declaratively define encode/decode functions for binary data.
+  A helper module to make encoding and decoding bitstrings easier.
 
   """
 
   @primitives [:uint, :sint, :float, :bytes, :binary, :bits, :bitstring, :utf8, :utf16, :utf32]
   @endianness [:big, :little, :native]
+  @defaults [
+    name: "",
+    fields: [],
+    defaults: [],
+    before_encode: nil,
+    after_decode: nil,
+    docstr: true,
+    private: false,
+    pattern: nil,
+    silent: true
+  ]
 
   # [[ PRIMITIVES ]]
+  # - https://www.erlang.org/doc/system/expressions#bit-syntax-expressions
 
   @doc """
   Returns the quoted rhs for an unsigned integer segment for given `size` in _bits_.
@@ -181,6 +193,10 @@ defmodule Packeteer do
     fld in [:bits, :bitstring, :bytes, :binary] and arg in [[], [nil]]
   end
 
+  defp set_defaults(opts) do
+    Keyword.merge(@defaults, opts)
+  end
+
   defp generic_defaults(opts) do
     # join only used by mixed/2 encoder
     # [ ] use @defaults and simply do kw = Keyword.merge(@default, kw)
@@ -237,11 +253,15 @@ defmodule Packeteer do
   # - uses fields to ensure all var's required by the codec exist
   #   when encoding them into a binary
   defp bindings(fields) do
-    for {n, _q} <- fields do
+    vars = Enum.filter(Macro.prewalker(fields), fn x -> is_atom(x) end) |> Enum.uniq()
+    IO.inspect(vars, label: :bindings)
+
+    # for {n, _q} <- fields do
+    for v <- vars do
       {:=, [],
        [
-         var(n),
-         {{:., [from_brackets: true], [Access, :get]}, [from_brackets: true], [var(:kw), n]}
+         var(v),
+         {{:., [from_brackets: true], [Access, :get]}, [from_brackets: true], [var(:kw), v]}
        ]}
     end
   end
@@ -362,137 +382,140 @@ defmodule Packeteer do
     if elem(v, 0) in @primitives, do: :p, else: :f
   end
 
-  defp get_size([size | _]) when is_integer(size) do
-    size
-  end
+  defp arity({:&, _, [{:/, _, [_, n]}]}),
+    do: n
 
-  # size is an expression, get the field names used (atoms)
-  defp get_size(ast) do
-    Enum.filter(Macro.prewalker(ast), fn x ->
-      IO.inspect(x, label: :prewalker)
-      is_atom(x)
-    end)
-  end
+  defp arity(_),
+    do: nil
 
-  # check primitive definitions -> nil | error string
-  defp check_pdef(pos, max, type, [])
-       when pos == max and type in [:bits, :bitstring, :bytes, :binary] do
-    # last field of this type may omit its size
-    nil
-  end
-
-  defp check_pdef(pos, _max, type, size)
-       when not is_integer(size) and type in [:uint, :sint, :bits, :bitstring, :bytes, :binary] do
-    # [ ] check if its an expression referencing earlier fields
-    "field #{pos}, #{type} requires a pos_integer size, got: #{inspect(size)}"
-  end
-
-  defp check_pdef(pos, _max, :float, size) when size not in [16, 32, 64] do
-    "field #{pos}, float valid sizes are: [16, 32, 64], got: #{inspect(size)}"
-  end
-
-  defp check_pdef(_pos, _max, type, _size) when type in [:utf8, :utf16, :utf32] do
-    nil
-  end
-
-  # all good
-  defp check_pdef(_pos, _max, _type, _size) do
-    nil
-  end
-
-  defp check!(:fdef, fields, file, line) do
+  defp check!(:defs, opts, file, line) do
     # check field definitions (as far as feasible)
-    {pdefs, fdefs} = Enum.split_with(fields, fn fld -> ftype(fld) == :p end)
+    fields = opts[:fields]
+    {pdefs, fdefs} = Enum.split_with(fields, fn field -> ftype(field) == :p end)
     IO.inspect(fdefs, label: :custom_codecs)
 
-    pdefs = Enum.with_index(pdefs)
-    max = length(pdefs) - 1
+    # custom encoder/decoders
+    for {k, {enc, dec}} <- fdefs do
+      if arity(enc) != 3 do
+        error =
+          ":#{k}, expected an encoder with arity 3, got: " <>
+            Macro.to_string(enc)
 
-    error =
-      for {{fname, fdef}, pos} <- pdefs do
-        if fdef == nil do
-          "#{fname} has no definition"
-        else
-          {type, _, args} = fdef
+        raise CompileError, file: file, line: line, description: error
+      end
 
-          IO.inspect(fdef, label: :fdef)
+      if arity(dec) != 5 do
+        error =
+          ":#{k}, expected a decoder with arity 5, got: " <>
+            Macro.to_string(dec)
 
-          case get_size(args) do
-            size when is_integer(size) ->
-              check_pdef(pos, max, type, size)
+        raise CompileError, file: file, line: line, description: error
+      end
+    end
 
-            fnames when is_list(fnames) ->
-              non_uint =
-                Enum.map(fnames, fn fld -> {fld, elem(fields[fld], 0)} end)
-                |> Enum.filter(fn {_, t} -> t != :uint end)
-                |> Enum.map(fn {fld, type} -> "#{fld}: is a #{type}" end)
-                |> Enum.join(", ")
+    # primitives
+    pos = Keyword.keys(fields) |> Enum.with_index()
 
-              if non_uint != "" do
-                fdef = Macro.to_string(fdef)
-                "field #{fname}: #{inspect(fdef)}, #{non_uint}"
-              else
-                nil
-              end
+    for {field, fdef} <- pdefs do
+      if fdef == nil do
+        ":#{field} has no definition"
+      else
+        {_type, _, args} = fdef
+
+        frefs = Enum.filter(Macro.prewalker(args), fn x -> is_atom(x) end)
+
+        for fref <- frefs do
+          {_, kw, _} = fdef
+
+          if pos[fref] == nil do
+            error = ":#{field}, refers to missing field: :#{fref}"
+            raise CompileError, file: file, line: kw[:line], description: error
+          end
+
+          unless pos[fref] < pos[field] do
+            error =
+              ":#{field}, can only refer to previous fields, not: :#{fref}"
+
+            raise CompileError, file: file, line: kw[:line], description: error
           end
         end
       end
-      |> Enum.filter(fn k -> k end)
-      |> Enum.join(", ")
-
-    if error != "" do
-      error = "definition error: " <> error
-      raise CompileError, file: file, line: line, description: error
     end
   end
 
-  defp check!(:dups, kv, file, line) do
-    # no duplicates allowed in kv
-    error =
-      kv
-      |> Enum.frequencies_by(fn {k, _} -> k end)
-      |> Enum.filter(fn {_, v} -> v > 1 end)
-      |> Enum.map(fn {k, _} -> "#{k}" end)
-      |> Enum.join(", ")
+  defp check!(:dups, opts, file, line) do
+    # no duplicates allowed in fields nor defaults
 
-    if error != "" do
-      error = "duplicate field names: "
-      raise CompileError, file: file, line: line, description: error
-    end
-  end
+    for kw <- [:fields, :defaults] do
+      fields = opts[kw]
 
-  defp check!(:miss, fields, values, file, line) do
-    # check for missing field definitions mentioned in defaults
-    error =
-      for {k, _} <- values do
-        if fields[k], do: nil, else: "#{inspect(k)}"
+      dups = Keyword.keys(fields) |> Enum.with_index()
+      dups = Enum.filter(dups, fn {key, pos} -> dups[key] != pos end)
+
+      if dups != [] do
+        error =
+          Enum.map(dups, fn {k, pos} -> ":#{k} (field ##{pos + 1})" end)
+          |> Enum.join(", ")
+
+        error = ":#{kw} has duplicates: " <> error
+        raise CompileError, file: file, line: line, description: error
       end
-      |> Enum.filter(fn v -> v end)
-      |> Enum.uniq()
-      |> Enum.join(", ")
+    end
+  end
 
-    if error != "" do
-      error = "defaults without field definition: " <> error
+  defp check!(:miss, opts, file, line) do
+    # check that :defaults only contains known fields
+    fields = opts[:fields]
+    values = opts[:defaults]
+
+    missing =
+      Enum.filter(values, fn {k, _v} -> fields[k] == nil end)
+      |> Enum.map(fn {k, _v} -> k end)
+
+    if missing != [] do
+      missing = Enum.map(missing, fn k -> ":#{k}" end) |> Enum.join(", ")
+      error = ":defaults has unknown fields: " <> missing
       raise CompileError, file: file, line: line, description: error
     end
   end
 
   defp check!(opts, file, line) do
-    # check for:
-    # - duplicate field names in fields & defaults
-    # - names in default that are not in fields
-    # - default values for primitives that don't match their spec
     fields = opts[:fields]
-    values = opts[:defaults] || []
 
-    # fields: [:x, a: 1, b: 2] is not caught by dialixer/compiler
-    # [ ] check for non-empty keyword list
-    # check!(:iskw, fields, file, line)
-    # check!(:iskw, values, file, line)
-    check!(:dups, fields, file, line)
-    check!(:dups, values, file, line)
-    check!(:miss, fields, values, file, line)
-    check!(:fdef, fields, file, line)
+    if fields == [] or not Keyword.keyword?(fields) do
+      raise CompileError,
+        file: file,
+        line: line,
+        description:
+          ":fields must be a keyword list of field definitions, got: #{inspect(opts[:fields])}"
+    end
+
+    values = opts[:defaults]
+
+    if not Keyword.keyword?(values) do
+      raise CompileError,
+        file: file,
+        line: line,
+        description:
+          ":defaults must be a keyword list of field values, got: #{inspect(opts[:fields])}"
+    end
+
+    empty = Enum.filter(fields, fn {_k, v} -> v == nil end)
+
+    if empty != [] do
+      error =
+        Enum.map(empty, fn {k, _v} -> "#{k}: (#{inspect(fields[k])})" end) |> Enum.join(", ")
+
+      raise CompileError,
+        file: file,
+        line: line,
+        description: ":fields has invalid definitions for: " <> error
+    end
+
+    check!(:dups, opts, file, line)
+    check!(:miss, opts, file, line)
+    check!(:defs, opts, file, line)
+
     # check!(:vals, fields, values, file, line)
   end
 
@@ -566,7 +589,8 @@ defmodule Packeteer do
   end
 
   defp fixed_ast(name, opts) do
-    # returns the ast for the fixed macro to use
+    # returns the ast for a single bit-syntax expression
+    IO.inspect(opts, label: :fixed_opts)
     opts = generic_defaults(opts)
     fields = opts[:fields]
     values = opts[:defaults]
@@ -605,8 +629,9 @@ defmodule Packeteer do
         end
 
         @doc unquote(decode_doc)
-        def unquote(decode_fun)(unquote_splicing(decode_args)) when is_binary(bin) do
+        def unquote(decode_fun)(unquote_splicing(decode_args), kw) when is_bitstring(bin) do
           try do
+            unquote(binds)
             <<_::bits-size(offset), rest::bits>> = bin
             unquote(codec) = rest
             kw = Enum.zip(unquote(keys), unquote(vars))
@@ -628,9 +653,191 @@ defmodule Packeteer do
     ast
   end
 
+  # [[ MIXED GENERATOR ]]
+
+  # group fields by type in order to turn consecutive primitives into a single
+  # private expression using bit syntax (i.e. a single fixed encoder/decoder)
+  # returns {funcs, defs}
+  # - funcs, list of function calls, including new, private fixed en/decoder
+  # - defs, list of ast's that will define the private fixed en/decoders
+  defp consolidate(fields, opts) do
+    # this is where consolidation starts, only used by `mixed_ast`
+    annotated_fields =
+      for field <- fields do
+        {ftype(field), field}
+      end
+      |> Enum.chunk_by(fn t -> elem(t, 0) end)
+
+    consolidate(annotated_fields, opts, [], [])
+  end
+
+  defp consolidate([], _opts, funcs, defs),
+    do: {funcs, defs}
+
+  defp consolidate([[{:f, _} | _] = h | tail], opts, funcs, defs) do
+    # plain function calls, so move on
+    flist = for {:f, f} <- h, do: f
+    consolidate(tail, opts, funcs ++ flist, defs)
+  end
+
+  defp consolidate([[{:p, _} | _] = h | tail], opts, funcs, defs) do
+    # turn list of consecutive primitives into single fixed encoder/decoder pair
+    plist = for {:p, p} <- h, do: p
+    klist = for {k, _} <- plist, do: k
+
+    # private func name fixed_<n>_encode/decode
+    n = System.unique_integer([:positive])
+    name = String.to_atom("fixed_#{n}_")
+    encode = String.to_atom("#{name}encode")
+    decode = String.to_atom("#{name}decode")
+
+    # take fields and defaults for these primitives from the given `opts`
+    fields = Keyword.take(opts[:fields], klist)
+    values = Keyword.take(opts[:defaults], klist)
+
+    # assemble args for call to fixed_ast/2 later on
+    bbdef = {name, fields: fields, defaults: values, docstr: false, private: true}
+
+    # can't use quote do &(encode/2) end, for some reason..
+    # uses nil so encoder/decoder gets defined in caller's context
+    call_enc = {:&, [], [{:/, [context: Elixir, imports: [{2, Kernel}]], [{encode, [], nil}, 1]}]}
+    call_dec = {:&, [], [{:/, [context: Elixir, imports: [{2, Kernel}]], [{decode, [], nil}, 3]}]}
+
+    # add consolidated primitives as single fixed expr to list of funcs
+    # add fixed args to the list of definitions for later ast generation
+    funcs = funcs ++ [{:fixed, {call_enc, call_dec}}]
+    defs = defs ++ [bbdef]
+    consolidate(tail, opts, funcs, defs)
+  end
+
+  defp mixed_ast(name, opts) do
+    # returns the ast for the mixed macro to use
+    opts = generic_defaults(opts)
+    fields = opts[:fields]
+    values = opts[:defaults]
+
+    encode_fun = String.to_atom("#{name}encode")
+    encode_args = maybe_pattern(:encode, opts)
+    encode_doc = docstring(:encode, opts)
+    before_encode = before_encode(opts[:before_encode])
+
+    decode_fun = String.to_atom("#{name}decode")
+    decode_args = maybe_pattern(:decode, opts)
+    decode_doc = docstring(:decode, opts)
+    after_decode = after_decode(opts[:after_decode])
+
+    {fields, defs} = consolidate(fields, opts)
+
+    fixed_funcs =
+      for {name, args} <- defs,
+          do: fixed_ast(name, args)
+
+    ast =
+      quote do
+        unquote_splicing(fixed_funcs)
+
+        @doc unquote(encode_doc)
+        def unquote(encode_fun)(unquote_splicing(encode_args)) do
+          unquote(before_encode)
+          kw = Keyword.merge(unquote(values), kw)
+          state = %{encoded: [], state: %{}}
+
+          map =
+            Enum.reduce(unquote(fields), state, fn fdef, acc ->
+              {field, {encode, _}} = fdef
+
+              if field == :fixed do
+                value = encode.(kw)
+                %{acc | encoded: acc.encoded ++ [{field, value}]}
+              else
+                {value, state} = encode.(field, kw, acc.state)
+                %{acc | encoded: acc.encoded ++ [{field, value}], state: state}
+              end
+            end)
+
+          map.encoded
+          |> Keyword.values()
+          |> Enum.reduce(<<>>, fn v, acc -> <<acc::bits, v::bits>> end)
+        end
+
+        @doc unquote(decode_doc)
+        def unquote(decode_fun)(unquote_splicing(decode_args)) do
+          # bin is included in state in case decoders "eat" the binary
+          # by returning the unprocessed part (so offset = 0)
+          state = %{offset: offset, bin: bin, kw: [], state: %{}}
+
+          map =
+            Enum.reduce(unquote(fields), state, fn fdef, acc ->
+              {field, {_, decode}} = fdef
+
+              if field == :fixed do
+                {offset, kw, bin} = decode.(acc.offset, acc.bin, acc.kw)
+                %{acc | offset: offset, bin: bin, kw: acc.kw ++ kw}
+              else
+                {offset, value, bin, state} =
+                  decode.(field, acc.kw, acc.offset, acc.bin, acc.state)
+
+                %{acc | offset: offset, bin: bin, kw: acc.kw ++ [{field, value}], state: state}
+              end
+            end)
+
+          {offset, kw, bin} = {map.offset, map.kw, map.bin}
+          unquote(after_decode)
+        end
+      end
+
+    ast = if opts[:private], do: do_defp(ast), else: ast
+
+    unless opts[:silent],
+      do: IO.puts(Macro.to_string(ast))
+
+    ast
+  end
+
   @doc """
-  Defines encode/decode functions for given `name` and `opts`, which must
-  include a list of [_primitive_](#primitives) fields.
+  Defines an encode and decode function for given `specification` in caller's
+  context.
+
+  The specification is a keyword list with at least a `:fields` entry
+  which contains one or more field definitions to be encoded, resp. decoded.
+
+  The `:fields` list contains {`:field_name`, `definition`}-pairs where definition
+  is either one of the [primitives](#primitives) or a pair of captured custom
+  `my_encode/3`, `my_decode/5` functions.
+
+  Optional parts of the `specification` include:
+
+  - `:name`, a binary (default "") used as prefix when defining the encode/decode
+  functions.  Any empty string would simply define `&encode/1` and `&decode/3`.
+
+  - `:defaults`, a keyword list with field_name,value-pairs (default []).  Used
+  by the encode function to fill in the blanks.
+
+  - `:before_encode`, if present, must be a function that takes a keyword list
+  of field,value-pairs and returns an updated list.  The function is called by
+  the encode function, after adding in any default values and before encoding
+  starts.  Useful for mapping symbolic names to their numeric value before
+  encoding.
+
+  - `:after_decode`, if present, must be a function that takes a keyword list
+  of field,value-pairs and returns a possibly modified result.  The function
+  is called by the decoder, which simply returns the result of this function.
+  Useful for mapping numeric values to their symbolic name after decoding.
+
+  - `:docstr`, if true, `pack/1` will include docstrings for the generated
+  encode and decode functions.
+
+  - `:private`, if `true`, the encode/decode functions are defined as private
+  functions in the caller's module without docstrings (i.e. this overrides
+  the `:docstr` setting). The default is `false`.
+
+  - `:pattern`, if present, must be a literal that will be included in the
+  signature of the encode/decode functions as their first argument.  Used
+  when generating multiple encoder/decoder functions with the same name and
+  which use pattern matching to select the right pair. The default is `nil`.
+
+  - `:silent`, if true, prints the defined functions to the console during
+  compilation.  The default is `false`.
 
   The following encode/decode functions will be defined in the calling module:
   - `\#{name}encode/1` and `\#{name}decode/2`, or
@@ -745,157 +952,8 @@ defmodule Packeteer do
       iex> todo
       "more stuff"
 
-  """
-  defmacro fixed(name, opts) do
-    check!(opts, __CALLER__.file, __CALLER__.line)
-    fixed_ast(name, opts)
-  end
+  ## custom encoders/decoders
 
-  # [[ MIXED GENERATOR ]]
-
-  # group fields by type in order to turn consecutive primitives into a single
-  # private expression using bit syntax (i.e. a single fixed encoder/decoder)
-  # returns {funcs, defs}
-  # - funcs, list of function calls, including new, private fixed en/decoder
-  # - defs, list of ast's that will define the private fixed en/decoders
-  defp consolidate(fields, opts) do
-    # this is where consolidation starts, only used by `mixed_ast`
-    annotated_fields =
-      for field <- fields do
-        {ftype(field), field}
-      end
-      |> Enum.chunk_by(fn t -> elem(t, 0) end)
-
-    consolidate(annotated_fields, opts, [], [])
-  end
-
-  defp consolidate([], _opts, funcs, defs),
-    do: {funcs, defs}
-
-  defp consolidate([[{:f, _} | _] = h | tail], opts, funcs, defs) do
-    # plain function calls, so move on
-    flist = for {:f, f} <- h, do: f
-    consolidate(tail, opts, funcs ++ flist, defs)
-  end
-
-  defp consolidate([[{:p, _} | _] = h | tail], opts, funcs, defs) do
-    # turn list of primitives into single fixed encoder/decoder pair
-    plist = for {:p, p} <- h, do: p
-    klist = for {k, _} <- plist, do: k
-
-    # private func name fixed_<n>_encode/decode
-    n = System.unique_integer([:positive])
-    name = String.to_atom("fixed_#{n}_")
-    encode = String.to_atom("#{name}encode")
-    decode = String.to_atom("#{name}decode")
-
-    # take fields and defaults for these primitives from the given `opts`
-    fields = Keyword.take(opts[:fields], klist)
-    values = Keyword.take(opts[:defaults], klist)
-
-    # assemble args for fixed call later on
-    bbdef = {name, fields: fields, defaults: values, docstr: false, private: true}
-
-    # can't use quote do &(encode/2) end, for some reason..
-    call_enc =
-      {:&, [],
-       [
-         {:/, [context: Elixir, imports: [{2, Kernel}]], [{encode, [], nil}, 1]}
-       ]}
-
-    call_dec =
-      {:&, [],
-       [
-         {:/, [context: Elixir, imports: [{2, Kernel}]], [{decode, [], nil}, 2]}
-       ]}
-
-    # add consolidated primitives as single fixed expr to list of funcs
-    # add fixed args to the list of definitions for later ast generation
-    funcs = funcs ++ [{:fixed, {call_enc, call_dec}}]
-    defs = defs ++ [bbdef]
-    consolidate(tail, opts, funcs, defs)
-  end
-
-  defp mixed_ast(name, opts) do
-    # returns the ast for the mixed macro to use
-    opts = generic_defaults(opts)
-    fields = opts[:fields]
-    values = opts[:defaults]
-    IO.inspect(fields, label: :fields)
-    IO.inspect(values, label: :values)
-
-    encode_fun = String.to_atom("#{name}encode")
-    encode_args = maybe_pattern(:encode, opts)
-    encode_doc = docstring(:encode, opts)
-    before_encode = before_encode(opts[:before_encode])
-
-    decode_fun = String.to_atom("#{name}decode")
-    decode_args = maybe_pattern(:decode, opts)
-    decode_doc = docstring(:decode, opts)
-    after_decode = after_decode(opts[:after_decode])
-
-    {fields, defs} = consolidate(fields, opts)
-
-    fixed_funcs =
-      for {name, args} <- defs,
-          do: fixed_ast(name, args)
-
-    ast =
-      quote do
-        unquote_splicing(fixed_funcs)
-
-        @doc unquote(encode_doc)
-        def unquote(encode_fun)(unquote_splicing(encode_args)) do
-          unquote(before_encode)
-          kw = Keyword.merge(unquote(values), kw)
-
-          encoded_kw =
-            for {field, {encode, _}} <- unquote(fields) do
-              if field == :fixed,
-                do: {field, encode.(kw)},
-                else: {field, encode.(field, kw[field])}
-            end
-
-          if unquote(opts[:join]),
-            do: Keyword.values(encoded_kw) |> Enum.join(),
-            else: encoded_kw
-        end
-
-        @doc unquote(decode_doc)
-        def unquote(decode_fun)(unquote_splicing(decode_args)) do
-          # bin is included in state in case decoders "eat" the binary
-          # by returning the unprocessed part (so offset = 0)
-          state = %{offset: offset, bin: bin, kw: []}
-
-          map =
-            Enum.reduce(unquote(fields), state, fn fdef, acc ->
-              {field, {_, decode}} = fdef
-
-              case field do
-                :fixed ->
-                  {offset, kw, bin} = decode.(acc.offset, acc.bin)
-                  %{acc | offset: offset, bin: bin, kw: acc.kw ++ kw}
-
-                _ ->
-                  {offset, kw, bin} = decode.(field, acc.kw, acc.offset, acc.bin)
-                  %{acc | offset: offset, bin: bin, kw: kw}
-              end
-            end)
-
-          {offset, kw, bin} = {map.offset, map.kw, map.bin}
-          unquote(after_decode)
-        end
-      end
-
-    ast = if opts[:private], do: do_defp(ast), else: ast
-
-    unless opts[:silent],
-      do: IO.puts(Macro.to_string(ast))
-
-    ast
-  end
-
-  @doc """
   Defines encode/decode functions for given `name` and `opts`, which must include
   a list of field definitions.
 
@@ -923,13 +981,6 @@ defmodule Packeteer do
   prefix in the mixed generated encode/decode function names and `opts` must
   have the mandatory `fields` entry, listing the field definitions.  All the
   other options of `fixed/2` are also supported by `mixed/2`.
-
-  One additional option is supported by `mixed/2`:
-
-  - `:join`, either `true` (default) or `false`, specifies whether the binary
-  parts are joined together by the mixed encoder or not.  If:
-    - `true`, the binary parts are joined and returned by the mixed encoder
-    - `false`, the list of fieldnames and their binary representation is returned instead.
 
   Finally, `mixed/2` allows for a mixture of primitive and non-primitive field
   definitions.  Consecutive primitives are collected and turned into a private `fixed/2`
@@ -1052,8 +1103,14 @@ defmodule Packeteer do
         expire: 1209600,
         minimum: 3600
       ]
-
   """
-  defmacro mixed(name, opts),
-    do: mixed_ast(name, opts)
+  defmacro pack(specification) do
+    opts = set_defaults(specification)
+    check!(opts, __CALLER__.file, __CALLER__.line)
+
+    case Enum.all?(opts[:fields], fn f -> ftype(f) == :p end) do
+      true -> fixed_ast(opts[:name], opts)
+      _ -> mixed_ast(opts[:name], opts)
+    end
+  end
 end
