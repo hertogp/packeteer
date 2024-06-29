@@ -1,6 +1,6 @@
 defmodule Packeteer do
   @moduledoc """
-  A helper libary to make encoding and decoding bitstrings easier.
+  A helper library to make encoding and decoding bitstrings easier.
 
   """
 
@@ -916,8 +916,51 @@ defmodule Packeteer do
       iex> todo
       "more stuff"
 
-  ## custom encoders/decoders
+  ## Custom encoders/decoders
 
+  Sometimes encoding/decoding bitstrings requires more that what can be achieved
+  by straight bit-syntax expressions.  In that case a custom encoder/decoder
+  pair can be specified in the fields definition as a two-tuple of:
+  `{&custom_encode/3, &custom_decode/5}`.
+
+  `pack/1` will construct private (and uniquely named) encode/decode functions
+  for consecutive primitives and arrives at a list of encoders/decoders that
+  are called in the order listed in the `:fields` definitions.
+
+  The custom encoder/decoder have the following typespecs:
+  ```elixir
+  @spec custom_encode(atom, Keyword.t, map) :: {bitstring, map}
+
+  # and
+
+  @spec custom_decode(atom, Keyword.t, offset, bitstring, map) :: {offset, term, bitstring, map}
+
+  # where
+  # - atom is the field name to be encode/decoded
+  # - Keyword.t the list of {field,value} to be encoded, resp. decoded thus far
+  # - offset is a non_negative_integer
+  # - bitstring is the bitstring as encoded or being decoded
+  # - map is a state that is passed along the encoder's/decoder's
+  ```
+
+  The custom encoder takes the name (an atom) of the field to be encoded, the
+  list of {field,value}-pairs and a state (map) and must return a `{bitstring, map}`
+  tuple where the bitstring is the encoded result and map the (possibly updated)
+  state.  Subsequent encoders (maybe itself) will be able to see any relevant
+  information left by previous encoders in the list.
+
+  The custom decoder takes the name (an atom) of the field to be decoded, a
+  keyword list of {field,values}-pairs decoded thusfar, the offset where decoding
+  should commence, the bitstring being decoded and a state in the form of a map.
+  It must return `{offset, term, bitstring, map}`-tuple.  Where offset is where
+  the next decoder should start, the term will be places as the value for this
+  field in the resulting keyword list, bitstring may be the leftover bits (in
+  which case offset should be set to `0`) and map is the, possibly updated, state.
+  Note that subsequent decoders will receive the offset, bitstring and map as
+  was returned by the custom decoder.
+
+  Not all encoders and/or decoders will need access to the state and/or fields
+  decoded thus far, but then again, some do.
 
   ## Example
 
