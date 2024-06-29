@@ -796,8 +796,9 @@ defmodule Packeteer do
   which contains one or more field definitions to be encoded, resp. decoded.
 
   The `:fields` list contains {`:name`, `definition`}-pairs where definition
-  is either one of the [primitives](#primitives) or a pair of captured custom
-  `my_encode/3`, `my_decode/5` functions.
+  is either:
+  - one of the [primitives](#primitives) or
+  - a pair of captured custom {`&my_encode/3`, `&my_decode/5`} functions.
 
   Optional parts of the `specification` include:
 
