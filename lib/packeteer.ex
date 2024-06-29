@@ -556,8 +556,8 @@ defmodule Packeteer do
   defp maybe_pattern(:encode, opts) do
     # return ast for encoder func args, optionally with extra 1st arg for
     # pattern matching:
-    # - normal: x_encode(kw \\ [])
-    # - pattern : x_encode(:something, kw \\ [])
+    # - normal: x_encode(kw)
+    # - pattern : x_encode(:something, kw)
     arg = [{:kw, [], Packeteer}]
     pat = opts[:pattern]
 
@@ -839,28 +839,29 @@ defmodule Packeteer do
   - `:silent`, if true, prints the defined functions to the console during
   compilation.  The default is `false`.
 
+  ## The encode/decode functions
+
   The following encode/decode functions will be defined in the calling module:
   - `\#{name}encode/1` and `\#{name}decode/2`, or
   - `\#{name}encode/2` and `\#{name}decode/3`
 
   whose signatures (assuming name is "name_") are:
   ```
-  name_encode(Keyword.t) :: binary | {:error, reason}
-  name_decode(offset, binary) :: {offset, Keyword.t, binary} | {:error, reason}
-
-  # or when using the option `pattern: literal`:
-  name_encode(literal, Keyword.t) :: binary | {:error, binary}
-  name_decode(literal, offset, binary) :: {offset, Keyword.t, binary} | {:error, reason}
+  name_encode(kw) :: binary | {:error, reason}
+  name_decode(offset, binary) :: {offset, kw, binary} | {:error, reason}
 
   # where:
+  # - kw is a keyword list of fields and values
   # - offset is a non_negative_integer
-  # - reason a, hopefully, informative  binary
-  # - literal is an expression that is its own ast
+  # - reason is a, hopefully, informative binary
   ```
 
-  See [literal](https://hexdocs.pm/elixir/typespecs.html#literals) for more
-  information. If some module M has only a single call to `fixed/2`, using
-  `name = ""` will define: `M.encode(kw)` and `M.decode(offset, bin)`.
+  Use the `:pattern` option to specify a literal
+  [literal](https://hexdocs.pm/elixir/typespecs.html#literals) that should
+  be included as the first argument in the encode/decode function definitions.
+  information.
+
+  ## Field definitions
 
   > #### Info {: .info}
   > If the last field in the list of definitions does not match the remaining
@@ -871,56 +872,6 @@ defmodule Packeteer do
   > the encoded binary.  Hidden also means it won't show up in the docstrings.
 
 
-  - `:fields` a mandatory list of [primitive](#primitives) field definitions
-  used to construct the bitstring match expression for both the encode and
-  decode functions. Hence, the order of field definitions in this list is
-  significant.
-
-  Other options include:
-
-  - `:defaults`, a keyword list specifying default values for one or more
-  fields, used by the encode function when called with fields missing. Note
-  that fields with the same name will encode to the first default value given
-  the nature of keyword lists.
-
-  - `:before_encode`, either an anonymous function or a function reference
-  whose signature is
-  ```
-  fun(Keyword.t) :: Keyword.t
-  ```
-  If specified, this function will be called with the original keyword arguments
-  supplemented with any default values for fields that were omitted in the call
-  to the encode function, prior to the actual encoding.
-
-  - `:after_decode`, either an anonymous function or a function reference whose
-  signature is
-  ```
-  fun(offset, Keyword.t, binary) :: {offset, Keyword.t, binary}
-  ```
-  If specified, this function will be called with the results of decoding and its
-  return value(s) are returned as-is. Although the assumption is it will adhere
-  to `{offset, Keyword.t, binary}` that need not be the case.
-
-  - `:docstr`, either `true` (the default) or `false`, specifies whether
-  or not docstrings are to be generated for the encode/decode functions. By
-  default the encode/decode functions are generated as public functions,
-  setting `docstr` to `false` allows for eliminating them from documentation
-  while still be available as public functions in your en/decoder module.
-
-  - `:private`, either `true` or `false` (default), specifies whether the
-  encode/decode functions are defined as private or public functions. If
-  `true`, this overrides the `:docstr` option without warning.
-
-  - `:pattern`, a literal expression that becomes the, additional, first argument of the
-  encode and decode functions.  Allows for creating multiple encode/decode
-  functions with the same name.  Additional, manual catch-all encode/decode
-  functions might be required to handle any `FunctionClauseError`.  Note that if
-  the generated encode/decode functions are private, the manual encode/decode
-  function names will need to be different.
-
-  - `:silent`, either `true` (default) or `false`, specifies whether the generated ast's
-  for the encode/decode functions are printed to stdout during compilation.
-
   ## Example
 
   A simple example would be to decode an unsigned integer whose width is
@@ -930,7 +881,8 @@ defmodule Packeteer do
       iex> mod = \"""
       ...> defmodule M do
       ...>  import Packeteer
-      ...>  fixed("",
+      ...>  pack([
+      ...>      name: "",
       ...>      fields: [
       ...>        len: uint(8),
       ...>        val: uint(:len * 4),
@@ -940,13 +892,13 @@ defmodule Packeteer do
       ...>       str: "stuff"
       ...>     ],
       ...>     docstr: false
-      ...>  )
+      ...>  ])
       ...> end
       ...> \"""
       iex> [{m, _}] = Code.compile_string(mod)
       iex> bin = m.encode(len: 4, val: 65535) <> "more stuff"
       <<4, 255, 255, "stuff", "more stuff">>
-      iex> m.decode(0, bin)
+      iex> m.decode(0, bin, %{})
       {64, [len: 4, val: 65535, str: "stuff"], <<4, 255, 255, "stuff", "more stuff">>}
       iex> <<_::bits-size(64), todo::binary>> = bin
       iex> todo
@@ -954,77 +906,6 @@ defmodule Packeteer do
 
   ## custom encoders/decoders
 
-  Defines encode/decode functions for given `name` and `opts`, which must include
-  a list of field definitions.
-
-  Sometimes binary protocols require more logic than what can be achieved
-  through bitstring match expressions alone.  `mixed/2` allows for
-  non-primitive field definitions consisting of captured encoder/decoder
-  function pairs.
-
-  The signatures of the `mixed/2` generated encode/decode functions are:
-  ```
-  encode(Keyword.t) :: binary | Keyword.t | {:error, reason}
-  decode(offset, Keyword.t, binary) :: Keyword.t | {:error, reason}
-
-  # or, when option `:pattern` is set to a literal
-  encode(literal, Keyword.t) :: binary | Keyword.t | {:error, reason}
-  decode(literal, offset, Keyword.t, binary) :: Keyword.t | {:error, reason}
-
-  # where:
-  # - offset is a non_neg_integer
-  # - reason is a binary
-  # - literal is an expression that is its own ast (e.g. :id, or %{id: 42})
-  ```
-
-  The `name` and `opts` work the same as in `fixed/2`: the `name` is used as
-  prefix in the mixed generated encode/decode function names and `opts` must
-  have the mandatory `fields` entry, listing the field definitions.  All the
-  other options of `fixed/2` are also supported by `mixed/2`.
-
-  Finally, `mixed/2` allows for a mixture of primitive and non-primitive field
-  definitions.  Consecutive primitives are collected and turned into a private `fixed/2`
-  generated encoder/decoder pair.  If the last field is a primitive, the fixed
-  encode/decode function will have a hidden `:skip__` field so the binary
-  matching won't fail and remaining bits are always matched out.
-
-  ## encoder/decoder functions
-
-  The encoder/decoder functions are expected to have signatures:
-
-  ```
-  encoder(name, any) :: binary
-  decoder(name, kw, offset, binary) :: {offset, kw, binary}
-
-  # where:
-  # - kw is [{field, value}] built thusfar resp. updated with a new field upon return
-  # - name is an atom denoting the field being encoded/decoded
-  # - offset is a non_negative_integer
-  ```
-
-  In addition to the `offset` and `bin` being decoded, the decoder also receives
-  the `name` of the field to be decoded as well as the list `[{field, value}]`
-  of decoded fields thusfar.  Hence, the decoder could take different actions based on
-  those.
-
-  Note that the return value of the decoder:
-  - must specify the new offset in _bits_, not bytes (!)
-  - return an updated keyword list, e.g. using `kw ++ [{name, value}]`
-  - return the binary (or remainder, with offset=0) for subsequent decoding
-
-  Appending the new field maintains the order of the decoded fields in the
-  resulting keyword list.  `Keyword.put/3` would put the new field in front of
-  what was decoded earlier and remove duplicates (if any). Returning only the
-  unprocessed part of the `binary` is certainly possible, but requires the
-  returned `offset` to be set to `0` bits.
-
-  > ### Warning {: .warning}
-  >
-  > non-primitive decoders should always take care of matching out the remainder of
-  > given binary, if using bitstring expression, via `<<..., _::bits>>`,
-  > otherwise their decoding will fail.  If the last field definition is a
-  > primitive, then `fixed/2` will add the hidden `:skip__` field to ensure a
-  > match will match the remainder.
 
   ## Example
 
@@ -1036,11 +917,12 @@ defmodule Packeteer do
       iex> defmodule RR do
       ...>   import Packeteer
       ...>
-      ...>   mixed("rdata_",
+      ...>   pack([
+      ...>     name: "rdata_",
       ...>     pattern: :soa,
       ...>     fields: [
-      ...>       mname: {&name_enc/2, &name_dec/4},
-      ...>       rname: {&name_enc/2, &name_dec/4},
+      ...>       mname: {&name_enc/3, &name_dec/5},
+      ...>       rname: {&name_enc/3, &name_dec/5},
       ...>       serial: uint(32),
       ...>       refresh: uint(32),
       ...>       retry: uint(32),
@@ -1056,19 +938,22 @@ defmodule Packeteer do
       ...>       expire: 1_209_600,
       ...>       minimum: 3600
       ...>     ]
-      ...>   )
+      ...>   ])
       ...>
       ...>   # custom encoder/decoder
-      ...>   def name_enc(_name, str) do
-      ...>     str
+      ...>   def name_enc(name, kw, state) do
+      ...>   dname =
+      ...>     kw[name]
       ...>     |> String.replace("@", ".", global: false)
       ...>     |> String.split(".")
       ...>     |> Enum.map(fn label -> <<byte_size(label)::8, label::binary>> end)
       ...>     |> Enum.join()
       ...>     |> Kernel.<>(<<0>>)
+      ...>   {dname, state}
       ...>   end
       ...>
-      ...>   def name_dec(name, kw, offset, bin) do
+      ...>   def name_dec(name, _kw, offset, bin, state) do
+      ...>     # we don't need any previously decoded fields
       ...>     {offset, dname} = do_name_dec(offset, bin, [])
       ...>     dname =
       ...>       if name == :rname,
@@ -1076,7 +961,7 @@ defmodule Packeteer do
       ...>         else: dname
       ...>
       ...>     # maintain field order
-      ...>     {offset, kw ++ [{name, dname}], bin}
+      ...>     {offset, dname, bin, state}
       ...>   end
       ...>
       ...>   defp do_name_dec(offset, bin, acc) do
