@@ -939,7 +939,7 @@ defmodule Packeteer do
   # where
   # - atom is the field name to be encode/decoded
   # - Keyword.t the list of {field,value} to be encoded, resp. decoded thus far
-  # - offset is a non_negative_integer
+  # - offset is a non_negative_integer where decoding either should start or left off
   # - term is what will be entered as the value for the field being decoded
   # - bitstring is the bitstring as encoded or being decoded
   # - map is a state that is passed along the encoder's/decoder's
@@ -952,7 +952,7 @@ defmodule Packeteer do
   information left by previous encoders in the list.
 
   The custom decoder takes the name (an atom) of the field to be decoded, a
-  keyword list of {field,values}-pairs decoded thusfar, the offset where decoding
+  keyword list of {field,value}-pairs decoded thusfar, the offset where decoding
   should commence, the bitstring being decoded and a state in the form of a map.
   It must return `{offset, term, bitstring, map}`-tuple.  Where offset is where
   the next decoder should start, the term will be placed as the value for this
