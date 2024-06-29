@@ -869,11 +869,11 @@ defmodule Packeteer do
 
   # where:
   # - Keyword.t is a list of {field,value}-pairs that were decoded
-  # - offset is a non_negative_integer
+  # - offset is a non_negative_integer where this decoder left off
   # - literal as specified by `:pattern`, e.g. `:soa` or %{type: 6} etc.
   ```
 
-  Use the `:pattern` option to specify a literal
+  Use the `:pattern` option to specify a
   [literal](https://hexdocs.pm/elixir/typespecs.html#literals) that should
   be included as the first argument in the encode/decode function definitions.
   information.
@@ -939,6 +939,7 @@ defmodule Packeteer do
   # - atom is the field name to be encode/decoded
   # - Keyword.t the list of {field,value} to be encoded, resp. decoded thus far
   # - offset is a non_negative_integer
+  # - term is what will be entered as the value for the field being decoded
   # - bitstring is the bitstring as encoded or being decoded
   # - map is a state that is passed along the encoder's/decoder's
   ```
