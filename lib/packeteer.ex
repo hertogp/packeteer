@@ -197,17 +197,6 @@ defmodule Packeteer do
     Keyword.merge(@defaults, opts)
   end
 
-  defp generic_defaults(opts) do
-    # join only used by mixed/2 encoder
-    # [ ] use @defaults and simply do kw = Keyword.merge(@default, kw)
-    opts
-    |> Keyword.put_new(:docstr, true)
-    |> Keyword.put_new(:silent, true)
-    |> Keyword.put_new(:join, true)
-    |> Keyword.put_new(:private, false)
-    |> Keyword.put_new(:defaults, [])
-  end
-
   # [[ FRAGMENTS ]]
   # - bit syntax:  <<var::spec, ..>>
   # - var::spec is a segment of the bit syntax expression
@@ -591,7 +580,7 @@ defmodule Packeteer do
   defp fixed_ast(name, opts) do
     # returns the ast for a single bit-syntax expression
     IO.inspect(opts, label: :fixed_opts)
-    opts = generic_defaults(opts)
+    # opts = generic_defaults(opts)
     fields = opts[:fields]
     values = opts[:defaults]
     all? = all?(fields)
@@ -712,7 +701,7 @@ defmodule Packeteer do
 
   defp mixed_ast(name, opts) do
     # returns the ast for the mixed macro to use
-    opts = generic_defaults(opts)
+    # opts = generic_defaults(opts)
     fields = opts[:fields]
     values = opts[:defaults]
 
