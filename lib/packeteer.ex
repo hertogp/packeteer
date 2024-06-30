@@ -988,29 +988,6 @@ defmodule Packeteer do
       iex> defmodule RR do
       ...>   import Packeteer
       ...>
-      ...>   pack([
-      ...>     name: "rdata_",
-      ...>     pattern: :soa,
-      ...>     fields: [
-      ...>       mname: {&name_enc/3, &name_dec/5},
-      ...>       rname: {&name_enc/3, &name_dec/5},
-      ...>       serial: uint(32),
-      ...>       refresh: uint(32),
-      ...>       retry: uint(32),
-      ...>       expire: uint(32),
-      ...>       minimum: uint(32)
-      ...>     ],
-      ...>     defaults: [
-      ...>       mname: "ns.icann.org",
-      ...>       rname: "noc@dns.icann.org",
-      ...>       serial: 2_024_041_834,
-      ...>       refresh: 7200,
-      ...>       retry: 3600,
-      ...>       expire: 1_209_600,
-      ...>       minimum: 3600
-      ...>     ]
-      ...>   ])
-      ...>
       ...>   # custom encoder/decoder
       ...>   def name_enc(name, kw, state) do
       ...>   dname =
@@ -1043,6 +1020,29 @@ defmodule Packeteer do
       ...>       _ -> do_name_dec(offset, bin, [label | acc])
       ...>     end
       ...>   end
+      ...>   pack([
+      ...>     name: "rdata_",
+      ...>     pattern: :soa,
+      ...>     fields: [
+      ...>       mname: {&name_enc/3, &name_dec/5},
+      ...>       rname: {&name_enc/3, &name_dec/5},
+      ...>       serial: uint(32),
+      ...>       refresh: uint(32),
+      ...>       retry: uint(32),
+      ...>       expire: uint(32),
+      ...>       minimum: uint(32)
+      ...>     ],
+      ...>     defaults: [
+      ...>       mname: "ns.icann.org",
+      ...>       rname: "noc@dns.icann.org",
+      ...>       serial: 2_024_041_834,
+      ...>       refresh: 7200,
+      ...>       retry: 3600,
+      ...>       expire: 1_209_600,
+      ...>       minimum: 3600
+      ...>     ]
+      ...>   ])
+      ...>
       ...> end
       iex> bin = RR.rdata_encode(:soa, [])  #=> <<2, 110, 115, 5, 105, 99, 97, ...>>
       iex> {offset, kw, _bin} = RR.rdata_decode(:soa, 0, bin)
