@@ -1002,7 +1002,7 @@ defmodule Packeteer do
       ...>
       ...>   def name_dec(name, _kw, offset, bin, state) do
       ...>     # we don't need any previously decoded fields
-      ...>     {offset, dname} = do_name_dec(offset, bin, [])
+      ...>     {offset, dname} = do_labels(offset, bin, [])
       ...>     dname =
       ...>       if name == :rname,
       ...>         do: String.replace(dname, ".", "@", global: false),
@@ -1011,15 +1011,16 @@ defmodule Packeteer do
       ...>     {offset, dname, bin, state}
       ...>   end
       ...>
-      ...>   defp do_name_dec(offset, bin, acc) do
+      ...>   defp do_labels(offset, bin, acc) do
       ...>     <<_::bits-size(offset), len::8, label::binary-size(len), _::bits>> = bin
       ...>     offset = offset + 8 * (1 + len)
       ...>
       ...>     case len do
       ...>       0 -> {offset, Enum.reverse(acc) |> Enum.join(".")}
-      ...>       _ -> do_name_dec(offset, bin, [label | acc])
+      ...>       _ -> do_labels(offset, bin, [label | acc])
       ...>     end
       ...>   end
+      ...>
       ...>   pack([
       ...>     name: "rdata_",
       ...>     pattern: :soa,
@@ -1042,7 +1043,6 @@ defmodule Packeteer do
       ...>       minimum: 3600
       ...>     ]
       ...>   ])
-      ...>
       ...> end
       iex> bin = RR.rdata_encode(:soa, [])  #=> <<2, 110, 115, 5, 105, 99, 97, ...>>
       iex> {offset, kw, _bin} = RR.rdata_decode(:soa, 0, bin)
