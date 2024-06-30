@@ -4,6 +4,18 @@ defmodule Packeteer do
 
   """
 
+  @typedoc "Either a map or a keyword list containing key,value-pairs."
+  @type kv :: Keyword.t() | map
+
+  @typedoc "A map containing encoder/decoder state information."
+  @type state :: map
+
+  @typedoc "An non negative integer."
+  @type offset :: non_neg_integer
+
+  @typedoc "A bitstring, possibly a binary"
+  @type bin :: bitstring
+
   @primitives [:uint, :sint, :float, :bytes, :binary, :bits, :bitstring, :utf8, :utf16, :utf32]
   @endianness [:big, :little, :native]
   # :pattern could be nil by choice, so no default and check absence/presence
@@ -565,7 +577,7 @@ defmodule Packeteer do
     arg = [{:offset, [], Packeteer}, {:bin, [], Packeteer}]
     pat = opts[:pattern]
 
-    if pat,
+    if Keyword.has_key?(opts, :pattern),
       do: [pat | arg],
       else: arg
   end
@@ -580,6 +592,7 @@ defmodule Packeteer do
 
   defp fixed_ast(name, opts) do
     # returns the ast for a single bit-syntax expression
+    # used for consecutive primitives in a field definitions
     IO.inspect(opts, label: :fixed_opts)
     # opts = generic_defaults(opts)
     fields = opts[:fields]
@@ -590,13 +603,13 @@ defmodule Packeteer do
     keys = Enum.map(fields, fn {k, _} -> k end)
     vars = Enum.map(keys, fn k -> var(k) end)
 
-    # xyz_encode(kw) or xyz_encode(pattern, kw)
+    # x_encode(kw) or xyz_encode(pattern, kw)
     encode_fun = String.to_atom("#{name}encode")
     encode_args = maybe_pattern(:encode, opts)
     encode_doc = docstring(:encode, opts)
     before_encode = before_encode(opts[:before_encode])
 
-    # xyz_decode(offset, bin, kw) or xyz_decode(pattern, offset, bin, kw)
+    # x_decode(offset, bin, kw) or xyz_decode(pattern, offset, bin, kw)
     # where kw is the list of fields decoded this far.
     decode_fun = String.to_atom("#{name}decode")
     decode_args = maybe_pattern(:decode, opts)
@@ -754,6 +767,7 @@ defmodule Packeteer do
           |> Enum.reduce(<<>>, fn v, acc -> <<acc::bits, v::bits>> end)
         end
 
+        # [ ] add kw to decode call (previous fields decoded)
         @doc unquote(decode_doc)
         def unquote(decode_fun)(unquote_splicing(decode_args)) do
           # bin is included in state in case decoders "eat" the binary
@@ -836,25 +850,30 @@ defmodule Packeteer do
 
   ## The encode function
 
-  `pack/1` defines an encode function with arity of 1 or 2 (if `:pattern` is
+  `pack/1` defines an encode function with arity of 2 or 3 (if `:pattern` is
   used).  They match the following typespecs (assuming `:name` is "my_"):
 
   ```elixir
-  @spec my_encode(Keyword.t) :: binary | {:error, binary}
-
+  @spec my_encode(kv, state) :: {bin, state} | {:error, binary}
   # or
-
-  @spec my_encode(literal, Keyword.t) :: binary | {error, binary}
-
-  # where:
-  # - Keyword.t is the list of fields and values to be encoded
-  # - literal as specified by `:pattern`, e.g. `:soa` or %{type: 6} etc.
+  @spec my_encode(literal, kv, state) :: {bin, state} | {:error, binary}
   ```
 
-  Use the `:pattern` option to specify a
-  [literal](https://hexdocs.pm/elixir/typespecs.html#literals) that should
-  be included as the first argument in the encode/decode function definitions.
-  information.
+  Where [`kv`](`t:kv/0`) contains key,value-pairs to be encoded and keys are
+  atoms (and unique). The [`state`](`t:state/0`) information is passed on to
+  custom encoders (if any), that may want to leverage work done by previous
+  encoders.
+
+  The [literal](https://hexdocs.pm/elixir/typespecs.html#literals) is included
+  when the `:pattern` option is present in the `specification` given to
+  `pack/1`.  This allows for multiple `specifications` that create encode
+  functions with the same name and a distinct first argument for pattern
+  matching.
+
+  The encode function returns {[`bin`](`t:bin/0`), [`state`](`t:state/0`)},
+  where `bin` is the bitstring representing the encoded values, along with a
+  (possibly updated) `state`.  Runtime exceptions are caught and turned into an
+  error tuple.
 
   ## The decode function
 
