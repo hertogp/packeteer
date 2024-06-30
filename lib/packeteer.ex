@@ -7,6 +7,9 @@ defmodule Packeteer do
   @typedoc "Either a map or a keyword list containing key,value-pairs."
   @type kv :: Keyword.t() | map
 
+  @typedoc "A field name as atom, unique within a `pack/1` specification."
+  @type key :: atom
+
   @typedoc "A map containing encoder/decoder state information."
   @type state :: map
 
@@ -720,7 +723,7 @@ defmodule Packeteer do
     fields = opts[:fields]
     values = opts[:defaults]
 
-    # xyz_encode(kw) or xyz_encode(pattern, kw)
+    # xyz_encode(kw, state) or xyz_encode(pattern, kw, state)
     encode_fun = String.to_atom("#{name}encode")
     encode_args = maybe_pattern(:encode, opts)
     encode_doc = docstring(:encode, opts)
@@ -859,10 +862,9 @@ defmodule Packeteer do
   @spec my_encode(literal, kv, state) :: {bin, state} | {:error, binary}
   ```
 
-  Where [`kv`](`t:kv/0`) contains key,value-pairs to be encoded and keys are
-  atoms (and unique). The [`state`](`t:state/0`) information is passed on to
-  custom encoders (if any), that may want to leverage work done by previous
-  encoders.
+  Where [`kv`](`t:kv/0`) contains [`key`](`t:key/0`),value-pairs to be encoded
+  and [`state`](`t:state/0`) information that is passed on to custom encoders
+  (if any), that may want to leverage work done by previous encoders.
 
   The [literal](https://hexdocs.pm/elixir/typespecs.html#literals) is included
   when the `:pattern` option is present in the `specification` given to
@@ -881,16 +883,9 @@ defmodule Packeteer do
   used).  They match the typespecs (assuming `:name` is "my_"):
 
   ```elixir
-  @spec my_decode(offset, binary) :: {offset, Keyword.t, binary} | {:error, reason}
-
+  @spec my_decode(offset, bin, kv) :: {offset, term, binary} | {:error, reason}
   # or
-
-  @spec my_decode(literal, offset, binary) :: {offset, Keyword.t, binary} | {:error, reason}
-
-  # where:
-  # - Keyword.t is a list of {field,value}-pairs that were decoded
-  # - offset is a non_negative_integer where this decoder left off
-  # - literal as specified by `:pattern`, e.g. :soa or %{type: 6} etc.
+  @spec my_decode(literal, offset, bin, kv) :: {offset, term, binary} | {:error, reason}
   ```
 
   Use the `:pattern` option to specify a
