@@ -10,7 +10,7 @@ defmodule Packeteer do
   @typedoc "A field name as atom, unique within a `pack/1` specification."
   @type key :: atom
 
-  @typedoc "A map containing encoder/decoder state information."
+  @typedoc "A map containing encoder or decoder state information."
   @type state :: map
 
   @typedoc "An non negative integer."
@@ -853,33 +853,29 @@ defmodule Packeteer do
 
   ## The encode function
 
-  `pack/1` defines an encode function with arity of 2 or 3 (if `:pattern` is
-  used).  They match the following typespecs (assuming `:name` is "my_"):
+  `pack/1` defines an encode function with arity of 1, 2, or 3, depending
+  on whether pack's field definitions are all primitives or not and whether
+  the `:pattern` option was used.  Regardless, the encode function returns
+  either a {[`bin`](`t:bin/0`), [`state`](`t:state/0`)}-tuple or an error
+  tuple with a reason for failure.
 
-  ```elixir
-  @spec my_encode(kv, state) :: {bin, state} | {:error, binary}
-  # or
-  @spec my_encode(literal, kv, state) :: {bin, state} | {:error, binary}
+  ```
+  Defines                   All primitive?   :pattern    Returns
+  my_encode(kv)             yes              absent      {bin, state} | {:error, binary}
+  my_encode(:x, kv)         yes              :x          {bin, state} | {:error, binary}
+  my_encode(kv, state)      no               absent      {bin, state} | {:error, binary}
+  my_encode(:x, kv, state)  no               :x          {bin, state} | {:error, binary}
   ```
 
-  Where [`kv`](`t:kv/0`) contains [`key`](`t:key/0`),value-pairs to be encoded
-  and [`state`](`t:state/0`) information that is passed on to custom encoders
-  (if any), that may want to leverage work done by previous encoders.
+  The [`kv`](`t:kv/0`) holds the key,value-pairs to be encoded.  If applicable,
+  the [`state`](`t:state/0`) holds any information from previous encode functions
+  that are passed onto custom encoders in this encode function, that might want
+  to leverage previous encoding results.
 
-  The [literal](https://hexdocs.pm/elixir/typespecs.html#literals) is included
-  when the `:pattern` option is present in the `specification` given to
-  `pack/1`.  This allows for multiple `specifications` that create encode
-  functions with the same name and a distinct first argument for pattern
-  matching.
-
-  The encode function returns {[`bin`](`t:bin/0`), [`state`](`t:state/0`)},
-  where `bin` is the bitstring representing the encoded values, along with a
-  (possibly updated) `state`.  Runtime exceptions are caught and turned into an
-  error tuple.
 
   ## The decode function
 
-  `pack/1` defines a decode function with arity of 2 or 3 (if `:pattern` is
+  `pack/1` defines a decode function with arity of 3 or 4 (if `:pattern` is
   used).  They match the typespecs (assuming `:name` is "my_"):
 
   ```elixir
@@ -945,19 +941,17 @@ defmodule Packeteer do
   The custom encoder/decoder have the following typespecs:
   ```elixir
   @spec custom_encode(atom, Keyword.t, map) :: {bitstring, map}
-
   # and
-
   @spec custom_decode(atom, Keyword.t, offset, bitstring, map) :: {offset, term, bitstring, map}
-
-  # where
-  # - atom is the field name to be encode/decoded
-  # - Keyword.t the list of {field,value} to be encoded, resp. decoded thus far
-  # - offset is a non_negative_integer where decoding either should start or left off
-  # - term is what will be entered as the value for the field being decoded
-  # - bitstring is the bitstring as encoded or being decoded
-  # - map is a state that is passed along the encoder's/decoder's
   ```
+
+  where
+  - atom is the field name to be encode/decoded
+  - Keyword.t the list of {field,value} to be encoded, resp. decoded thus far
+  - offset is a non_negative_integer where decoding either should start or left off
+  - term is what will be entered as the value for the field being decoded
+  - bitstring is the bitstring as encoded or being decoded
+  - map is a state that is passed along the encoder's/decoder's
 
   The custom encoder takes the name (an atom) of the field to be encoded, the
   list of {field,value}-pairs and a state (map) and must return a `{bitstring, map}`
