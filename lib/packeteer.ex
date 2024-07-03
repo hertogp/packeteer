@@ -558,11 +558,7 @@ defmodule Packeteer do
     end
   end
 
-  defp maybe_pattern(:encode, opts) do
-    # return ast for encoder func args, optionally with extra 1st arg for
-    # pattern matching:
-    # - normal: x_encode(kw)
-    # - pattern : x_encode(:something, kw)
+  defp func_args(:encode, opts) do
     arg = [{:kw, [], Packeteer}]
     pat = opts[:pattern]
 
@@ -571,12 +567,7 @@ defmodule Packeteer do
       else: arg
   end
 
-  defp maybe_pattern(:decode, opts) do
-    # return ast for decoder func args, optionally with extra 1st arg for
-    # pattern matching:
-    # normal:  x_decode(offset \\ 0, bin)
-    # pattern :  x_decode(:something, offset \\ 0, bin)
-    # changes that to x_encode(:something, kw \\ []).  Useful if you
+  defp func_args(:decode, opts) do
     arg = [{:offset, [], Packeteer}, {:bin, [], Packeteer}]
     pat = opts[:pattern]
 
@@ -608,14 +599,14 @@ defmodule Packeteer do
 
     # x_encode(kw) or xyz_encode(pattern, kw)
     encode_fun = String.to_atom("#{name}encode")
-    encode_args = maybe_pattern(:encode, opts)
+    encode_args = func_args(:encode, opts)
     encode_doc = docstring(:encode, opts)
     before_encode = before_encode(opts[:before_encode])
 
     # x_decode(offset, bin, kw) or xyz_decode(pattern, offset, bin, kw)
     # where kw is the list of fields decoded this far.
     decode_fun = String.to_atom("#{name}decode")
-    decode_args = maybe_pattern(:decode, opts)
+    decode_args = func_args(:decode, opts)
     decode_doc = docstring(:decode, opts)
     after_decode = after_decode(opts[:after_decode])
 
@@ -725,14 +716,14 @@ defmodule Packeteer do
 
     # xyz_encode(kw, state) or xyz_encode(pattern, kw, state)
     encode_fun = String.to_atom("#{name}encode")
-    encode_args = maybe_pattern(:encode, opts)
+    encode_args = func_args(:encode, opts)
     encode_doc = docstring(:encode, opts)
     before_encode = before_encode(opts[:before_encode])
 
     # xyz_decode(offset, bin, kw) or xyz_decode(pattern, offset, bin, kw)
     # where kw is the list of fields decoded this far.
     decode_fun = String.to_atom("#{name}decode")
-    decode_args = maybe_pattern(:decode, opts)
+    decode_args = func_args(:decode, opts)
     decode_doc = docstring(:decode, opts)
     after_decode = after_decode(opts[:after_decode])
 
@@ -825,14 +816,14 @@ defmodule Packeteer do
   - `:defaults`, a keyword list with `{:key,value}`-pairs (default `[]`).
   Used by the encode function to fill in the blanks.
 
-  - `:before_encode`, if present, must be a function ([`kv`](`t:kv/0`) ->
-  ([`kv`](`t:kv/0`) which returns an updated list.  The function is called by
+  - `:before_encode`, if present, must be a function ([`kv`](`t:kv/0`)) ->
+  [`kv`](`t:kv/0`) which returns an updated list.  The function is called by
   the encode function, after adding in any default values and before encoding
   starts.  Useful for mapping symbolic names to their numeric value before
   encoding.
 
-  - `:after_decode`, if present, must be a function ([`kv`](`t:kv/0`) ->
-  ([`kv`](`t:kv/0`) which returns a possibly modified result. Useful for
+  - `:after_decode`, if present, must be a function ([`kv`](`t:kv/0`)) ->
+  [`kv`](`t:kv/0`) which returns a possibly modified result. Useful for
   mapping numeric values to their symbolic name after decoding.
 
   - `:docstr`, if true, `pack/1` will include docstrings for the generated
@@ -853,17 +844,17 @@ defmodule Packeteer do
   ## The encode function
 
   `pack/1` defines an encode function with arity of 1, 2, or 3, depending
-  on whether pack's field definitions are all primitives or not and whether
+  on whether pack's `:fields` definitions are all primitives or not and whether
   the `:pattern` option was used.  Regardless, the encode function returns
   either a {[`bin`](`t:bin/0`), [`state`](`t:state/0`)}-tuple or an error
   tuple with a reason for failure.
 
   ```
-  Defines                   All primitive?   :pattern    Returns
-  my_encode(kv)             yes              absent      {bin, state} | {:error, binary}
-  my_encode(:x, kv)         yes              :x          {bin, state} | {:error, binary}
-  my_encode(kv, state)      no               absent      {bin, state} | {:error, binary}
-  my_encode(:x, kv, state)  no               :x          {bin, state} | {:error, binary}
+  Defines                   Any custom?   :pattern    Returns
+  my_encode(kv)             no            absent      {bin, state} | {:error, binary}
+  my_encode(:x, kv)         no            :x          {bin, state} | {:error, binary}
+  my_encode(kv, state)      yes           absent      {bin, state} | {:error, binary}
+  my_encode(:x, kv, state)  yes           :x          {bin, state} | {:error, binary}
   ```
 
   The [`kv`](`t:kv/0`) holds the key,value-pairs to be encoded.  If applicable,
@@ -903,10 +894,12 @@ defmodule Packeteer do
   `pack/1` defines a decode function with arity of 3 or 4 (if `:pattern` is
   used).  They match the typespecs (assuming `:name` is "my_"):
 
-  ```elixir
-  @spec my_decode(offset, bin, kv) :: {offset, term, binary} | {:error, reason}
-  # or
-  @spec my_decode(literal, offset, bin, kv) :: {offset, term, binary} | {:error, reason}
+  ```
+  Defines                           Any custom?  :pattern  Returns
+  my_decode(offset, bin)            no            absent   {offset, kv, state} | {:error, binary}
+  my_decode(:x, offset, bin)        no            :x       {offset, kv, state} | {:error, binary}
+  my_decode(offset, bin, state)     yes           absent   {offset, kv, state} | {:error, binary}
+  my_decode(:x, offset, bin, state) yes           :x       {offset, kv, state} | {:error, binary}
   ```
 
   Use the `:pattern` option to specify a
