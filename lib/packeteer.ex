@@ -813,20 +813,20 @@ defmodule Packeteer do
   which contains one or more definitions for fields to be encoded, resp.
   decoded.
 
-  The `:fields` list contains {`:name`, `definition`}-pairs where definition
+  The `:fields` list contains `{:name, definition}`-pairs where definition
   is either:
   - one of the [primitives](#primitives) or
   - a pair of captured custom {`&my_encode/3`, `&my_decode/5`} functions.
 
   Optional parts of the `specification` include:
-  - `:name`, a binary (default ""), used as prefix for the function name of
+  - `:name`, a binary (default `""`), used as prefix for the function name of
   the encode/decode functions.
 
-  - `:defaults`, a keyword list with {`:name`,value}-pairs (default []).  Used
-  by the encode function to fill in the blanks.
+  - `:defaults`, a keyword list with `{:key,value}`-pairs (default `[]`).
+  Used by the encode function to fill in the blanks.
 
   - `:before_encode`, if present, must be a function that takes a keyword list
-  of field,value-pairs and returns an updated list.  The function is called by
+  of key,value-pairs and returns an updated list.  The function is called by
   the encode function, after adding in any default values and before encoding
   starts.  Useful for mapping symbolic names to their numeric value before
   encoding.
@@ -877,7 +877,7 @@ defmodule Packeteer do
   The encode function also returns a (possibly updated) [`state`](`t:state/0`)
   to be used in other encoder calls (if any).
 
-  When the fields definition uses only [`primitives`](#primitives) no state
+  When the `:fields` definition uses only [`primitives`](#primitives) no state
   information can be used, since encoding (and decoding) is done with a single
   bit-syntax expression.
 
