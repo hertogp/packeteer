@@ -872,6 +872,33 @@ defmodule Packeteer do
   that are passed onto custom encoders in this encode function, that might want
   to leverage previous encoding results.
 
+  The [`bin`](`t:bin/0`) is the result of combining the bitstrings that each
+  encode a field value (taken from [`kv`](`t:kv/0`)) into an overall bitstring.
+  The encode function also returns a (possibly updated) [`state`](`t:state/0`)
+  to be used in other encoder calls (if any).
+
+  When the fields definition uses only [`primitives`](#primitives) no state
+  information can be used, since encoding (and decoding) is done with a single
+  bit-syntax expression.
+
+  A custom encoder for a field is a function `(key, kv, state) -> {bitstring,
+  state}` where:
+  - `t:key/0`, the name of the field to be encoded
+  - `t:kv/0`, holds all key,value-pairs that are being encoded
+  - `t:state/0`, which may contain state information from previous custom encoders
+  - `t:bin/0`, is the value encoded as a bitstring
+  The encoder should also return a new state, possibly updated with information
+  for later custom encoders, maybe possibly itself.
+
+
+
+  On the other hand, if custom encoder/decoder pairs are used in the field
+  definitions, `pack/1` will consolidate any consecutive primitives into an
+  internal, private and uniquely named, encoder (and decoder) function and the
+  uses the list of internal and custom encoders to encode given
+  [`kv`](`t:kv/0`) into a bitstring, maintaining the order as specified in the
+  field definitions.
+
 
   ## The decode function
 
