@@ -881,23 +881,22 @@ defmodule Packeteer do
   information can be used, since encoding (and decoding) is done with a single
   bit-syntax expression.
 
-  A custom encoder for a field is a function `(key, kv, state) -> {bitstring,
-  state}` where:
-  - `t:key/0`, the name of the field to be encoded
-  - `t:kv/0`, holds all key,value-pairs that are being encoded
-  - `t:state/0`, which may contain state information from previous custom encoders
-  - `t:bin/0`, is the value encoded as a bitstring
-  The encoder should also return a new state, possibly updated with information
-  for later custom encoders, maybe possibly itself.
+  A custom encoder for a field is a function `(key, kv, state) -> {bin, state}`
+  where:
+  - [`key`](`t:key/0`), the name of the field to be encoded
+  - [`kv`](`t:kv/0`), holds all key,value-pairs that are being encoded
+  - [`state`](`t:state/0`), which may contain state information from custom encoders
+  - [`bin`](`t:bin/0`), is the value encoded as a bitstring
 
+  The custom encoder must return `{bin, state}`, the `bin` will be added
+  to the resulting bitstring and `state` will be passed onto other custom
+  encoders (if any) and ultimately be returned by the encode function itself.
 
-
-  On the other hand, if custom encoder/decoder pairs are used in the field
-  definitions, `pack/1` will consolidate any consecutive primitives into an
-  internal, private and uniquely named, encoder (and decoder) function and the
-  uses the list of internal and custom encoders to encode given
-  [`kv`](`t:kv/0`) into a bitstring, maintaining the order as specified in the
-  field definitions.
+  If custom encoder/decoder pairs are used in the field definitions, `pack/1`
+  will consolidate any consecutive primitives into an internal, private and
+  uniquely named, encoder (and decoder) function and the uses the list of
+  internal and custom encoders to encode given [`kv`](`t:kv/0`) into a
+  bitstring, maintaining the order as specified in the field definitions.
 
 
   ## The decode function
