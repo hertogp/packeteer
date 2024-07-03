@@ -539,7 +539,7 @@ defmodule Packeteer do
     # return ast (or not) that calls the specified {after_decode: fun}
     if fun do
       quote do
-        unquote(fun).(offset, kw, bin)
+        {offset, unquote(fun).(kw), bin}
       end
     else
       quote do
@@ -825,16 +825,15 @@ defmodule Packeteer do
   - `:defaults`, a keyword list with `{:key,value}`-pairs (default `[]`).
   Used by the encode function to fill in the blanks.
 
-  - `:before_encode`, if present, must be a function that takes a keyword list
-  of key,value-pairs and returns an updated list.  The function is called by
+  - `:before_encode`, if present, must be a function ([`kv`](`t:kv/0`) ->
+  ([`kv`](`t:kv/0`) which returns an updated list.  The function is called by
   the encode function, after adding in any default values and before encoding
   starts.  Useful for mapping symbolic names to their numeric value before
   encoding.
 
-  - `:after_decode`, if present, must be a function that takes a keyword list
-  of field,value-pairs and returns a possibly modified result.  The function
-  is called by the decoder, which simply returns the result of this function.
-  Useful for mapping numeric values to their symbolic name after decoding.
+  - `:after_decode`, if present, must be a function ([`kv`](`t:kv/0`) ->
+  ([`kv`](`t:kv/0`) which returns a possibly modified result. Useful for
+  mapping numeric values to their symbolic name after decoding.
 
   - `:docstr`, if true, `pack/1` will include docstrings for the generated
   encode and decode functions.
@@ -845,7 +844,7 @@ defmodule Packeteer do
 
   - `:pattern`, if present, must be a literal that will be included in the
   signature of the encode/decode functions as their first argument.  Used
-  when generating multiple encoder/decoder functions with the same name and
+  when generating multiple encode/decode functions with the same name
   which use pattern matching to select the right pair.
 
   - `:silent`, if `false`, prints the defined functions to the console during
