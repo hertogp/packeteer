@@ -10,6 +10,9 @@ defmodule Packeteer do
   @typedoc "A field name as atom, unique within a `pack/1` specification."
   @type key :: atom
 
+  @typedoc "Any value for a given field in a `pack/1` specification."
+  @type value :: any
+
   @typedoc "A map containing encoder or decoder state information."
   @type state :: map
 
@@ -844,7 +847,7 @@ defmodule Packeteer do
   ## The encode function
 
   `pack/1` defines an encode function with arity of 1, 2, or 3, depending
-  on whether pack's `:fields` definitions are all primitives or not and whether
+  on whether pack's `:fields` definitions have custom encoders or not and whether
   the `:pattern` option was used.  Regardless, the encode function returns
   either a {[`bin`](`t:bin/0`), [`state`](`t:state/0`)}-tuple or an error
   tuple with a reason for failure.
@@ -871,6 +874,8 @@ defmodule Packeteer do
   information can be used, since encoding (and decoding) is done with a single
   bit-syntax expression.
 
+  ### A custom encoder
+
   A custom encoder for a field is a function `(key, kv, state) -> {bin, state}`
   where:
   - [`key`](`t:key/0`), the name of the field to be encoded
@@ -891,8 +896,11 @@ defmodule Packeteer do
 
   ## The decode function
 
-  `pack/1` defines a decode function with arity of 3 or 4 (if `:pattern` is
-  used).  They match the typespecs (assuming `:name` is "my_"):
+  `pack/1` defines a decode function with arity of 2, 3 or 4 depending on
+  whether the `:fields` definitions have custom decoders or not and
+  whether the `:pattern` option was used.  Regardless, the decode function
+  returns either {[`offset`](`t:offset/0`), [`kv`](`t:kv/0`),
+  [`state`](`t:state/0`)} or an error tuple.
 
   ```
   Defines                           Any custom?  :pattern  Returns
@@ -902,10 +910,9 @@ defmodule Packeteer do
   my_decode(:x, offset, bin, state) yes           :x       {offset, kv, state} | {:error, binary}
   ```
 
-  Use the `:pattern` option to specify a
-  [literal](https://hexdocs.pm/elixir/typespecs.html#literals) that should
-  be included as the first argument in the encode/decode function definitions.
-  information.
+  The [`bin`](`t:bin/0`) is the bitstring that is being decoded, starting at
+  [`offset`](`t:offset/0`) and it returns a new `offset`, the `kv` with key,value-pairs
+  that were decoded along with `state` information.
 
   > #### Info {: .info}
   > If the last field in the list of definitions does not match the remaining
@@ -915,6 +922,10 @@ defmodule Packeteer do
   > Upon encoding it encodes an empty string so it won't add any bits to
   > the encoded binary.  Hidden also means it won't show up in the docstrings.
 
+  Use the `:pattern` option to specify a
+  [literal](https://hexdocs.pm/elixir/typespecs.html#literals) that should
+  be included as the first argument in the encode/decode function definitions.
+  information.
 
   ## Example
 
