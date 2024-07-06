@@ -4,7 +4,7 @@ defmodule Packeteer do
 
   """
 
-  @typedoc "Either a map or a keyword list containing key,value-pairs."
+  @typedoc "A key-value store, either a map or a keyword list"
   @type kv :: Keyword.t() | map
 
   @typedoc "A field name as atom, unique within a `pack/1` specification."
@@ -819,6 +819,10 @@ defmodule Packeteer do
   - `:defaults`, a keyword list with `{:key,value}`-pairs (default `[]`).
   Used by the encode function to fill in the blanks.
 
+  - `:access`, path to the `:fields` in the given [`kv`](`t:kv/0`) store.  If
+  not used, the given `kv` should contain the `:fields` to be encoded or
+  decoded.
+
   - `:before_encode`, if present, must be a function ([`kv`](`t:kv/0`)) ->
   [`kv`](`t:kv/0`) which returns an updated list.  The function is called by
   the encode function, after adding in any default values and before encoding
@@ -846,33 +850,16 @@ defmodule Packeteer do
 
   ## The encode function
 
-  `pack/1` defines an encode function with arity of 1, 2, or 3, depending
-  on whether pack's `:fields` definitions have custom encoders or not and whether
-  the `:pattern` option was used.  Regardless, the encode function returns
-  either a {[`bin`](`t:bin/0`), [`state`](`t:state/0`)}-tuple or an error
-  tuple with a reason for failure.
+  `pack/1` defines an encode function with arity of 1 or 2 (if the `:pattern`
+  option was used).  Regardless, the encode function returns either a
+  {[`bin`](`t:bin/0`), [`state`](`t:state/0`)}-tuple or an error tuple with a
+  reason for failure.
 
   ```
-  Defines                   Any custom?   :pattern    Returns
-  my_encode(kv)             no            absent      {bin, state} | {:error, binary}
-  my_encode(:x, kv)         no            :x          {bin, state} | {:error, binary}
-  my_encode(kv, state)      yes           absent      {bin, state} | {:error, binary}
-  my_encode(:x, kv, state)  yes           :x          {bin, state} | {:error, binary}
+  Defines
+  my_encode({kv, bin, state})     -> {kv, bin, state}
+  my_encode(:x, {kv, bin, state}) -> {kv, bin, state}
   ```
-
-  The [`kv`](`t:kv/0`) holds the key,value-pairs to be encoded.  If applicable,
-  the [`state`](`t:state/0`) holds any information from previous encode functions
-  that are passed onto custom encoders in this encode function, that might want
-  to leverage previous encoding results.
-
-  The [`bin`](`t:bin/0`) is the result of combining the bitstrings that each
-  encode a field value (taken from [`kv`](`t:kv/0`)) into an overall bitstring.
-  The encode function also returns a (possibly updated) [`state`](`t:state/0`)
-  to be used in other encoder calls (if any).
-
-  When the `:fields` definition uses only [`primitives`](#primitives) no state
-  information can be used, since encoding (and decoding) is done with a single
-  bit-syntax expression.
 
   ### A custom encoder
 
@@ -883,49 +870,17 @@ defmodule Packeteer do
   - [`state`](`t:state/0`), which may contain state information from custom encoders
   - [`bin`](`t:bin/0`), is the value encoded as a bitstring
 
-  The custom encoder must return `{bin, state}`, the `bin` will be added
-  to the resulting bitstring and `state` will be passed onto other custom
-  encoders (if any) and ultimately be returned by the encode function itself.
-
-  If custom encoder/decoder pairs are used in the field definitions, `pack/1`
-  will consolidate any consecutive primitives into an internal, private and
-  uniquely named, encoder (and decoder) function and the uses the list of
-  internal and custom encoders to encode given [`kv`](`t:kv/0`) into a
-  bitstring, maintaining the order as specified in the field definitions.
-
 
   ## The decode function
 
-  `pack/1` defines a decode function with arity of 2, 3 or 4 depending on
-  whether the `:fields` definitions have custom decoders or not and
-  whether the `:pattern` option was used.  Regardless, the decode function
-  returns either {[`offset`](`t:offset/0`), [`kv`](`t:kv/0`),
-  [`state`](`t:state/0`)} or an error tuple.
+  `pack/1` defines a decode function with arity of 1 or 2 (if the `:pattern`
+  option is used).
 
   ```
-  Defines                           Any custom?  :pattern  Returns
-  my_decode(offset, bin)            no            absent   {offset, kv, state} | {:error, binary}
-  my_decode(:x, offset, bin)        no            :x       {offset, kv, state} | {:error, binary}
-  my_decode(offset, bin, state)     yes           absent   {offset, kv, state} | {:error, binary}
-  my_decode(:x, offset, bin, state) yes           :x       {offset, kv, state} | {:error, binary}
+  Defines
+  my_decode({offset, bin, kv, state})     -> {offset, bin, kv, state}
+  my_decode(:x, {offset, bin, kv, state}) -> {offset, bin, kv, state}
   ```
-
-  The [`bin`](`t:bin/0`) is the bitstring that is being decoded, starting at
-  [`offset`](`t:offset/0`) and it returns a new `offset`, the `kv` with key,value-pairs
-  that were decoded along with `state` information.
-
-  > #### Info {: .info}
-  > If the last field in the list of definitions does not match the remaining
-  > bits of any given bitstring, a hidden field `:skip__` is appended to the
-  > expression to ensure matching won't fail.  It is removed from the resulting
-  > keyword list prior to being handed to the `:after_decoding` function (if any).
-  > Upon encoding it encodes an empty string so it won't add any bits to
-  > the encoded binary.  Hidden also means it won't show up in the docstrings.
-
-  Use the `:pattern` option to specify a
-  [literal](https://hexdocs.pm/elixir/typespecs.html#literals) that should
-  be included as the first argument in the encode/decode function definitions.
-  information.
 
   ## Example
 

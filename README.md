@@ -14,7 +14,8 @@ This is what a DNS header encoder/decoder could look like:
 defmodule Header do
   import Packeteer
 
-  fixed("",
+  pack([
+    name: "",
     fields: [
       id: uint(16),
       qr: bits(1),
@@ -33,13 +34,14 @@ defmodule Header do
       arc: uint(16)
     ],
     defaults: [
-      qr: 0,     # query
+      qr: 0,     # query or respone
       opcode: 0, # query
       rd: 1,     # recursion desired
       z: 0,      # not used
       cd: 0,     # not check disabled
       rcode: 0,  # no error
-    ])
+    ]
+  ])
 end
 ```
 
