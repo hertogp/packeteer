@@ -820,17 +820,16 @@ defmodule Packeteer do
   Used by the encode function to fill in the blanks.
 
   - `:access`, path to the `:fields` in the given [`kv`](`t:kv/0`) store.  If
-  not used, the given `kv` should contain the `:fields` to be encoded or
-  decoded.
+  not used, `kv` should contain the `:fields` to be encoded or decoded.
 
   - `:before_encode`, if present, must be a function ([`kv`](`t:kv/0`)) ->
-  [`kv`](`t:kv/0`) which returns an updated list.  The function is called by
-  the encode function, after adding in any default values and before encoding
-  starts.  Useful for mapping symbolic names to their numeric value before
-  encoding.
+  [`kv`](`t:kv/0`) which returns an updated key-value store.  The function is
+  called by the encode function, after adding in any default values and before
+  encoding starts.  Useful for mapping symbolic names to their numeric value
+  before encoding.
 
   - `:after_decode`, if present, must be a function ([`kv`](`t:kv/0`)) ->
-  [`kv`](`t:kv/0`) which returns a possibly modified result. Useful for
+  [`kv`](`t:kv/0`) which returns a possibly modified key-value store. Useful for
   mapping numeric values to their symbolic name after decoding.
 
   - `:docstr`, if true, `pack/1` will include docstrings for the generated
@@ -855,15 +854,18 @@ defmodule Packeteer do
   {[`bin`](`t:bin/0`), [`state`](`t:state/0`)}-tuple or an error tuple with a
   reason for failure.
 
-  ```
-  Defines
+  ```elixir
   my_encode({kv, bin, state})     -> {kv, bin, state}
-  my_encode(:x, {kv, bin, state}) -> {kv, bin, state}
+  my_encode({kv, bin, state}, :x) -> {kv, bin, state}
   ```
 
   ### A custom encoder
 
   A custom encoder for a field is a function `(key, kv, state) -> {bin, state}`
+  ```elixir
+  custom_enc({key, kv, state}) -> {bin, state}
+  ```
+
   where:
   - [`key`](`t:key/0`), the name of the field to be encoded
   - [`kv`](`t:kv/0`), holds all key,value-pairs that are being encoded
@@ -879,7 +881,7 @@ defmodule Packeteer do
   ```
   Defines
   my_decode({offset, bin, kv, state})     -> {offset, bin, kv, state}
-  my_decode(:x, {offset, bin, kv, state}) -> {offset, bin, kv, state}
+  my_decode({offset, bin, kv, state}, :x) -> {offset, bin, kv, state}
   ```
 
   ## Example
